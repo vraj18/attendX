@@ -1,0 +1,263 @@
+<!DOCTYPE html>
+<html lang="en">
+
+<head>
+  <meta charset="UTF-8" />
+  <meta name="viewport" content="width=device-width, initial-scale=1.0" />
+  <title>Student Profile — Student Attendance & Registration System</title>
+  <meta name="description"
+    content="View student course registrations, attendance percentage, and manage their profile." />
+  <link rel="stylesheet" href="css/style.css" />
+  <script src="js/auth.js"></script>
+</head>
+
+<body>
+
+  <aside class="sidebar">
+    <div class="sidebar-logo">
+      <div class="logo-icon">🎓</div>
+      <h1>VNIT PORTAL</h1>
+      <span>Student Management System</span>
+    </div>
+    <nav class="sidebar-nav">
+      <span class="nav-section-label">Main</span>
+      <a href="index.html" class="nav-link">Dashboard</a>
+      <a href="registration.html" class="nav-link">Registration</a>
+      <a href="attendance.html" class="nav-link">Attendance</a>
+      <a href="profile.html" class="nav-link active"> Student Profile</a>
+      <span class="nav-section-label admin-only">Reports</span>
+      <a href="report.html" class="nav-link admin-only" id="nav-report"> Attendance Report</a>
+    </nav>
+    <div class="sidebar-footer">Oracle 21c &nbsp;•&nbsp; PL/SQL Powered</div>
+  </aside>
+  <script>
+    if (currentUser && currentUser.Role === 'student') {
+      document.querySelectorAll('.admin-only').forEach(el => el.style.display = 'none');
+    }
+  </script>
+
+  <main class="main-content">
+    <div class="page-header">
+      <h2>Student Profile</h2>
+      <p>Search a student to view registrations, courses, and attendance</p>
+    </div>
+
+    <!-- Search -->
+    <div class="card mb-2">
+      <div style="display:flex;gap:.75rem;align-items:flex-end">
+        <div class="form-group" style="margin:0;flex:1">
+          <label class="form-label">Student ID or Name</label>
+          <div class="search-bar">
+            <span class="search-icon">🔍</span>
+            <input type="text" id="searchInput" class="form-control" placeholder="Enter Student ID…"
+              onkeydown="if(event.key==='Enter') searchStudent()" />
+          </div>
+        </div>
+        <button class="btn btn-primary" onclick="searchStudent()">Search</button>
+        <button class="btn btn-ghost" onclick="showAllStudents()">Show All</button>
+      </div>
+    </div>
+    <script>
+      if (currentUser && currentUser.Role === 'student') {
+        document.getElementById('searchInput').value = currentUser.ID;
+        document.getElementById('searchInput').readOnly = true;
+        document.querySelector('.btn-primary').style.display = 'none';
+        document.querySelector('.btn-ghost').style.display = 'none';
+        setTimeout(searchStudent, 200);
+      }
+    </script>
+
+    <!-- Profile card (hidden initially) -->
+    <div id="profileSection" style="display:none">
+      <div class="grid-2 mb-2">
+        <!-- Info card -->
+        <div class="card">
+          <div style="display:flex;align-items:center;gap:1.25rem;margin-bottom:1.25rem">
+            <div id="avatarBig"
+              style="width:64px;height:64px;border-radius:50%;background:var(--grad-primary);display:flex;align-items:center;justify-content:center;font-size:1.75rem;font-weight:800;flex-shrink:0">
+            </div>
+            <div>
+              <div id="pName" style="font-size:1.25rem;font-weight:800"></div>
+              <div id="pEmail" style="font-size:.85rem;color:var(--text-muted)"></div>
+              <div style="margin-top:.3rem" id="pBadges"></div>
+            </div>
+          </div>
+          <div style="display:grid;grid-template-columns:1fr 1fr;gap:.75rem">
+            <div style="background:var(--bg-input);border-radius:var(--radius-sm);padding:.75rem">
+              <div style="font-size:.7rem;color:var(--text-muted);margin-bottom:.2rem">STUDENT ID</div>
+              <div id="pStudentId" style="font-weight:700;color:var(--accent)"></div>
+            </div>
+            <div style="background:var(--bg-input);border-radius:var(--radius-sm);padding:.75rem">
+              <div style="font-size:.7rem;color:var(--text-muted);margin-bottom:.2rem">DEPARTMENT</div>
+              <div id="pDept" style="font-weight:600"></div>
+            </div>
+            <div style="background:var(--bg-input);border-radius:var(--radius-sm);padding:.75rem">
+              <div style="font-size:.7rem;color:var(--text-muted);margin-bottom:.2rem">PHONE</div>
+              <div id="pPhone" style="font-weight:600"></div>
+            </div>
+            <div style="background:var(--bg-input);border-radius:var(--radius-sm);padding:.75rem">
+              <div style="font-size:.7rem;color:var(--text-muted);margin-bottom:.2rem">ADMISSION DATE</div>
+              <div id="pAdmDate" style="font-weight:600"></div>
+            </div>
+          </div>
+        </div>
+
+        <!-- Attendance summary -->
+        <div class="card">
+          <div class="card-title">📊 Attendance Overview</div>
+          <div id="attSummary">
+            <div class="loading">
+              <div class="spinner"></div><span>Loading…</span>
+            </div>
+          </div>
+        </div>
+      </div>
+
+      <!-- Registered courses -->
+      <div class="card">
+        <div class="card-title">📚 Registered Courses</div>
+        <div id="regCourses">
+          <div class="loading">
+            <div class="spinner"></div>
+          </div>
+        </div>
+      </div>
+    </div>
+
+    <!-- All students table -->
+    <div id="allStudentsSection" style="display:none">
+      <div class="card">
+        <div class="card-title">👨‍🎓 All Students</div>
+        <div class="table-wrap" id="allStudentsTable"></div>
+      </div>
+    </div>
+  </main>
+
+  <div class="toast-container" id="toastContainer"></div>
+  <script src="js/app.js"></script>
+  <script>
+    const API = 'http://localhost:3000/api';
+
+    async function searchStudent() {
+      const q = document.getElementById('searchInput').value.trim();
+      if (!q) { showToast('Enter a student ID', 'info'); return; }
+      try {
+        const r = await fetch(`${API}/students/${q}`);
+        const d = await r.json();
+        if (!d.success) { showToast(d.message, 'error'); return; }
+        renderProfile(d.data);
+        loadCourses(d.data.STUDENTID);
+      } catch (e) { showToast('Network error', 'error'); }
+    }
+
+    function renderProfile(s) {
+      document.getElementById('profileSection').style.display = 'block';
+      document.getElementById('allStudentsSection').style.display = 'none';
+
+      document.getElementById('avatarBig').textContent = s.NAME.charAt(0);
+      document.getElementById('pName').textContent = s.NAME;
+      document.getElementById('pEmail').textContent = s.EMAIL;
+      document.getElementById('pStudentId').textContent = s.STUDENTID;
+      document.getElementById('pDept').textContent = s.DEPARTMENT;
+      document.getElementById('pPhone').textContent = s.PHONE || '—';
+      document.getElementById('pAdmDate').textContent = formatDate(s.ADMISSIONDATE);
+
+      const statusBadge = `<span class="badge badge-${s.STATUS === 'Active' ? 'success' : s.STATUS === 'Dropped' ? 'danger' : 'gray'}">${s.STATUS}</span>`;
+      const levelBadge = `<span class="badge badge-${s.PROGRAMLEVEL === 'PG' ? 'purple' : 'info'}">${s.PROGRAMLEVEL}</span>`;
+      document.getElementById('pBadges').innerHTML = statusBadge + ' ' + levelBadge;
+    }
+
+    async function loadCourses(studentId) {
+      const regEl = document.getElementById('regCourses');
+      const sumEl = document.getElementById('attSummary');
+      regEl.innerHTML = '<div class="loading"><div class="spinner"></div></div>';
+      sumEl.innerHTML = '<div class="loading"><div class="spinner"></div></div>';
+
+      try {
+        const r = await fetch(`${API}/registration/student/${studentId}`);
+        const d = await r.json();
+
+        if (!d.success || !d.data.length) {
+          regEl.innerHTML = '<div class="empty-state"><div class="empty-icon">📭</div><p>No registrations found</p></div>';
+          sumEl.innerHTML = '<div class="empty-state"><p>No data</p></div>';
+          return;
+        }
+
+        // Attendance summary
+        const avgPct = d.data.reduce((a, c) => a + (c.ATTENDANCEPCT || 0), 0) / d.data.length;
+        const aboveThreshold = d.data.filter(c => (c.ATTENDANCEPCT || 0) >= 75).length;
+        sumEl.innerHTML = `
+      <div style="text-align:center;margin-bottom:1.25rem">
+        <div style="font-size:3rem;font-weight:800;background:var(--grad-${avgPct >= 75 ? 'success' : avgPct >= 50 ? 'warning' : 'danger'});-webkit-background-clip:text;-webkit-text-fill-color:transparent;background-clip:text">${avgPct.toFixed(1)}%</div>
+        <div style="font-size:.85rem;color:var(--text-muted)">Average across all courses</div>
+      </div>
+      <div class="progress-bar-wrap" style="margin-bottom:.5rem">
+        <div class="progress-bar ${avgPct >= 75 ? 'green' : avgPct >= 50 ? 'yellow' : 'red'}" style="width:${avgPct}%"></div>
+      </div>
+      <div style="font-size:.8rem;color:var(--text-muted);margin-top:.5rem">${aboveThreshold} of ${d.data.length} courses ≥ 75%</div>`;
+
+        // Courses table
+        regEl.innerHTML = `<div class="table-wrap"><table>
+      <thead><tr>
+        <th>Course</th><th>Section</th><th>Session</th><th>Faculty</th>
+        <th>Slot</th><th>Status</th><th>Attendance %</th>
+      </tr></thead>
+      <tbody>${d.data.map(c => {
+          const pct = c.ATTENDANCEPCT || 0;
+          return `<tr>
+          <td><strong>${c.COURSECODE}</strong><br><span style="font-size:.75rem;color:var(--text-muted)">${c.COURSENAME}</span></td>
+          <td>${c.SECTIONNAME}</td>
+          <td>${c.SESSIONNAME}</td>
+          <td>${c.FACULTYNAME}</td>
+          <td style="font-size:.8rem">${c.SLOT1 || '—'}</td>
+          <td><span class="badge badge-${c.REGSTATUS === 'Registered' ? 'success' : c.REGSTATUS === 'Dropped' ? 'danger' : 'warning'}">${c.REGSTATUS}</span></td>
+          <td>
+            <div style="display:flex;align-items:center;gap:.5rem">
+              <div class="progress-bar-wrap" style="width:80px">
+                <div class="progress-bar ${pct >= 75 ? 'green' : pct >= 50 ? 'yellow' : 'red'}" style="width:${pct}%"></div>
+              </div>
+              <span style="font-size:.8rem;font-weight:600;color:${pct >= 75 ? 'var(--success)' : pct >= 50 ? 'var(--warning)' : 'var(--danger)'}">${pct}%</span>
+            </div>
+          </td>
+        </tr>`;
+        }).join('')}</tbody></table></div>`;
+      } catch (e) {
+        regEl.innerHTML = '<div class="empty-state"><p>Error loading courses</p></div>';
+      }
+    }
+
+    async function showAllStudents() {
+      document.getElementById('profileSection').style.display = 'none';
+      document.getElementById('allStudentsSection').style.display = 'block';
+      const wrap = document.getElementById('allStudentsTable');
+      wrap.innerHTML = '<div class="loading"><div class="spinner"></div><span>Loading…</span></div>';
+      try {
+        const r = await fetch(`${API}/students`);
+        const d = await r.json();
+        if (!d.success) return;
+        wrap.innerHTML = `<table>
+      <thead><tr><th>ID</th><th>Name</th><th>Department</th><th>Level</th><th>Status</th><th>Action</th></tr></thead>
+      <tbody>${d.data.map(s => `<tr>
+        <td style="color:var(--accent);font-weight:600">${s.STUDENTID}</td>
+        <td>
+          <div style="display:flex;align-items:center;gap:.6rem">
+            <div style="width:30px;height:30px;border-radius:50%;background:var(--grad-primary);display:flex;align-items:center;justify-content:center;font-weight:700;font-size:.8rem">${s.NAME.charAt(0)}</div>
+            ${s.NAME}
+          </div>
+        </td>
+        <td>${s.DEPARTMENT}</td>
+        <td><span class="badge badge-${s.PROGRAMLEVEL === 'PG' ? 'purple' : 'info'}">${s.PROGRAMLEVEL}</span></td>
+        <td><span class="badge badge-${s.STATUS === 'Active' ? 'success' : 'danger'}">${s.STATUS}</span></td>
+        <td><button class="btn btn-ghost btn-sm" onclick="document.getElementById('searchInput').value=${s.STUDENTID};searchStudent()">View →</button></td>
+      </tr>`).join('')}</tbody></table>`;
+      } catch (e) { wrap.innerHTML = '<div class="empty-state"><p>Backend not reachable</p></div>'; }
+    }
+
+    function formatDate(d) {
+      if (!d) return '—';
+      return new Date(d).toLocaleDateString('en-IN', { day: '2-digit', month: 'short', year: 'numeric' });
+    }
+  </script>
+</body>
+
+</html>

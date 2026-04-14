@@ -1,0 +1,279 @@
+<!DOCTYPE html>
+<html lang="en">
+
+<head>
+  <meta charset="UTF-8" />
+  <meta name="viewport" content="width=device-width, initial-scale=1.0" />
+  <title>Attendance — Student Attendance & Registration System</title>
+  <meta name="description" content="Mark and manage student attendance by section, date, and slot." />
+  <link rel="stylesheet" href="css/style.css" />
+  <script src="js/auth.js"></script>
+</head>
+
+<body>
+
+  <aside class="sidebar">
+    <div class="sidebar-logo">
+      <div class="logo-icon">🎓</div>
+      <h1>VNIT PORTAL</h1>
+      <span>Student Management System</span>
+    </div>
+    <nav class="sidebar-nav">
+      <span class="nav-section-label">Main</span>
+      <a href="index.html" class="nav-link"> Dashboard</a>
+      <a href="registration.html" class="nav-link"> Registration</a>
+      <a href="attendance.html" class="nav-link active">Attendance</a>
+      <a href="profile.html" class="nav-link"> Student Profile</a>
+      <span class="nav-section-label admin-only">Reports</span>
+      <a href="report.html" class="nav-link admin-only" id="nav-report">
+        Attendance Report
+      </a>
+    </nav>
+    <div class="sidebar-footer">Oracle 21c &nbsp;•&nbsp; PL/SQL Powered</div>
+  </aside>
+  <script>
+    if (currentUser && currentUser.Role === 'student') {
+      window.location.href = 'index.html'; // students cannot access the marking system
+    }
+  </script>
+
+  <main class="main-content">
+    <div class="page-header">
+      <h2>Mark Attendance</h2>
+      <p>Select a section, date, and slot — then mark each student</p>
+    </div>
+
+    <!-- Controls -->
+    <div class="card mb-2">
+      <div class="card-title">⚙️ Session Controls</div>
+      <div style="display:grid;grid-template-columns:1fr 1fr 1fr 1fr auto;gap:1rem;align-items:flex-end">
+        <div class="form-group" style="margin:0">
+          <label class="form-label">Section</label>
+          <select id="att_section" class="form-control" onchange="onSectionChange()">
+            <option value="">— Select Section —</option>
+          </select>
+        </div>
+        <div class="form-group" style="margin:0">
+          <label class="form-label">Date</label>
+          <input type="date" id="att_date" class="form-control" value="${today()}" />
+        </div>
+        <div class="form-group" style="margin:0">
+          <label class="form-label">Slot</label>
+          <select id="att_slot" class="form-control">
+            <option value="1">Slot 1</option>
+            <option value="2">Slot 2</option>
+          </select>
+        </div>
+        <div class="form-group" style="margin:0">
+          <label class="form-label">Faculty ID (Marker)</label>
+          <input type="number" id="att_faculty" class="form-control" placeholder="e.g. 1" />
+        </div>
+        <button class="btn btn-primary" onclick="loadAttendanceSheet()">Load Sheet</button>
+      </div>
+      <div style="display:flex;gap:.75rem;margin-top:1rem">
+        <button class="btn btn-ghost btn-sm" onclick="bulkInitAbsent()">Init All Absent</button>
+        <button class="btn btn-success btn-sm" onclick="markAllPresent()">Mark All Present</button>
+        <button class="btn btn-primary btn-sm" onclick="saveAllAttendance()">Save All</button>
+        <span id="saveStatus" style="font-size:.8rem;color:var(--text-muted);align-self:center"></span>
+      </div>
+    </div>
+
+    <!-- Attendance sheet -->
+    <div class="card">
+      <div class="flex-between mb-2">
+        <div class="card-title" style="margin-bottom:0">👥 Student Attendance Sheet</div>
+        <div id="sessionInfo" style="font-size:.8rem;color:var(--text-muted)"></div>
+      </div>
+
+      <div id="attendanceSheet">
+        <div class="empty-state">
+          <div class="empty-icon">📋</div>
+          <p>Select a section and click "Load Sheet"</p>
+        </div>
+      </div>
+    </div>
+  </main>
+
+  <div class="toast-container" id="toastContainer"></div>
+  <script src="js/app.js"></script>
+  <script>
+    const API = 'http://localhost:3000/api';
+    // Map: studentId → status for current session
+    let attendanceMap = {};
+    let currentSection = null;
+
+    function today() {
+      return new Date().toISOString().slice(0, 10);
+    }
+    document.getElementById('att_date').value = today();
+
+    // ── Load sections into dropdown ────────────────────────────
+    async function loadSectionDropdown() {
+      try {
+        const r = await fetch(`${API}/registration/sections`);
+        const d = await r.json();
+        if (!d.success) return;
+        const sel = document.getElementById('att_section');
+        sel.innerHTML = '<option value="">— Select Section —</option>' +
+          d.data.map(s =>
+            `<option value="${s.SECTIONID}" data-course="${s.COURSECODE}" data-name="${s.SECTIONNAME}" data-slot1="${s.SLOT1 || ''}" data-faculty="${s.FACULTYID || ''}">
+          ${s.COURSECODE} – Sec ${s.SECTIONNAME} | ${s.SESSIONNAME}
+        </option>`
+          ).join('');
+      } catch (e) { }
+    }
+
+    function onSectionChange() {
+      const sel = document.getElementById('att_section');
+      const opt = sel.selectedOptions[0];
+      if (!opt || !opt.value) return;
+      document.getElementById('sessionInfo').textContent =
+        `${opt.dataset.course} – Section ${opt.dataset.name} | Slot 1: ${opt.dataset.slot1 || '—'}`;
+    }
+
+    // ── Load attendance sheet ──────────────────────────────────
+    async function loadAttendanceSheet() {
+      const secId = document.getElementById('att_section').value;
+      const date = document.getElementById('att_date').value;
+      const slot = document.getElementById('att_slot').value;
+      if (!secId) { showToast('Select a section first', 'info'); return; }
+
+      const el = document.getElementById('attendanceSheet');
+      el.innerHTML = '<div class="loading"><div class="spinner"></div><span>Loading…</span></div>';
+      attendanceMap = {};
+      currentSection = secId;
+
+      try {
+        // Get registered students
+        const regR = await fetch(`${API}/registration/sections/${secId}`);
+        const regD = await regR.json();
+
+        // Get existing attendance for this date+slot
+        const attR = await fetch(`${API}/attendance/section/${secId}?date=${date}&slot=${slot}`);
+        const attD = await attR.json();
+
+        if (!regD.success || !regD.data.length) {
+          el.innerHTML = '<div class="empty-state"><div class="empty-icon">📭</div><p>No students registered in this section</p></div>';
+          return;
+        }
+
+        // Build attendance map from existing records
+        if (attD.success) {
+          attD.data.forEach(a => { attendanceMap[a.STUDENTID] = a.ATTSTATUS; });
+        }
+
+        renderAttendanceSheet(regD.data);
+      } catch (e) {
+        el.innerHTML = '<div class="empty-state"><p>Error loading attendance sheet</p></div>';
+      }
+    }
+
+    function renderAttendanceSheet(students) {
+      const el = document.getElementById('attendanceSheet');
+      const rows = students.map(s => {
+        const status = attendanceMap[s.STUDENTID] || 'Absent';
+        return `
+    <div class="att-row" data-id="${s.STUDENTID}" style="display:flex;align-items:center;gap:1rem;padding:.75rem;border-bottom:1px solid var(--border);transition:background .15s">
+      <div style="width:38px;height:38px;border-radius:50%;background:var(--grad-primary);display:flex;align-items:center;justify-content:center;font-weight:700;flex-shrink:0">
+        ${s.STUDENTNAME.charAt(0)}
+      </div>
+      <div style="flex:1;min-width:0">
+        <div style="font-weight:600;font-size:.875rem">${s.STUDENTNAME}</div>
+        <div style="font-size:.75rem;color:var(--text-muted)">ID: ${s.STUDENTID} &nbsp;|&nbsp; ${s.PROGRAMLEVEL}</div>
+      </div>
+      <div class="att-toggle" id="toggle_${s.STUDENTID}">
+        <button onclick="setStatus(${s.STUDENTID},'Present')" class="${status === 'Present' ? 'active-P' : ''}">P</button>
+        <button onclick="setStatus(${s.STUDENTID},'Absent')"  class="${status === 'Absent' ? 'active-A' : ''}">A</button>
+        <button onclick="setStatus(${s.STUDENTID},'Late')"    class="${status === 'Late' ? 'active-L' : ''}">L</button>
+      </div>
+    </div>`;
+      }).join('');
+
+      const total = students.length;
+      const present = Object.values(attendanceMap).filter(v => v === 'Present' || v === 'Late').length;
+
+      el.innerHTML = `
+    <div style="display:flex;align-items:center;gap:1rem;margin-bottom:.75rem;padding:.5rem;background:var(--bg-input);border-radius:var(--radius-sm)">
+      <span style="font-size:.85rem;color:var(--text-secondary)">Total: <strong>${total}</strong></span>
+      <span style="font-size:.85rem;color:var(--success)">Present: <strong id="presentCount">${present}</strong></span>
+      <span style="font-size:.85rem;color:var(--danger)">Absent: <strong id="absentCount">${total - present}</strong></span>
+    </div>
+    <div id="studentRows">${rows}</div>`;
+    }
+
+    function setStatus(studentId, status) {
+      attendanceMap[studentId] = status;
+      const toggle = document.getElementById(`toggle_${studentId}`);
+      toggle.querySelectorAll('button').forEach(b => b.className = '');
+      const map = { 'Present': 'active-P', 'Absent': 'active-A', 'Late': 'active-L' };
+      const idx = { 'Present': 0, 'Absent': 1, 'Late': 2 }[status];
+      toggle.querySelectorAll('button')[idx].className = map[status];
+      updateCounts();
+    }
+
+    function updateCounts() {
+      const vals = Object.values(attendanceMap);
+      const present = vals.filter(v => v === 'Present' || v === 'Late').length;
+      const total = document.querySelectorAll('.att-row').length;
+      const pc = document.getElementById('presentCount');
+      const ac = document.getElementById('absentCount');
+      if (pc) pc.textContent = present;
+      if (ac) ac.textContent = total - present;
+    }
+
+    function markAllPresent() {
+      document.querySelectorAll('.att-row').forEach(row => {
+        setStatus(+row.dataset.id, 'Present');
+      });
+    }
+
+    async function bulkInitAbsent() {
+      const secId = document.getElementById('att_section').value;
+      const date = document.getElementById('att_date').value;
+      const slot = document.getElementById('att_slot').value;
+      const facultyId = document.getElementById('att_faculty').value || 1;
+      if (!secId) { showToast('Select a section first', 'info'); return; }
+      try {
+        const r = await fetch(`${API}/attendance/bulk`, {
+          method: 'POST', headers: { 'Content-Type': 'application/json' },
+          body: JSON.stringify({ sectionId: +secId, date, slot: +slot, defaultStatus: 'Absent', markedBy: +facultyId })
+        });
+        const d = await r.json();
+        showToast(d.message, d.success ? 'success' : 'error');
+        if (d.success) loadAttendanceSheet();
+      } catch (e) { showToast('Network error', 'error'); }
+    }
+
+    async function saveAllAttendance() {
+      const secId = document.getElementById('att_section').value;
+      const date = document.getElementById('att_date').value;
+      const slot = document.getElementById('att_slot').value;
+      const facultyId = +(document.getElementById('att_faculty').value || 1);
+      if (!secId) { showToast('Select a section first', 'info'); return; }
+
+      const status = document.getElementById('saveStatus');
+      status.textContent = 'Saving…';
+      let success = 0, fail = 0;
+
+      const entries = Object.entries(attendanceMap);
+      for (const [sid, st] of entries) {
+        try {
+          const r = await fetch(`${API}/attendance/mark`, {
+            method: 'POST', headers: { 'Content-Type': 'application/json' },
+            body: JSON.stringify({ studentId: +sid, sectionId: +secId, date, slot: +slot, status: st, markedBy: facultyId })
+          });
+          const d = await r.json();
+          d.success ? success++ : fail++;
+        } catch (e) { fail++; }
+      }
+
+      status.textContent = '';
+      if (fail === 0) showToast(`✅ Saved attendance for ${success} students`, 'success');
+      else showToast(`Saved: ${success}, Failed: ${fail}`, fail > 0 ? 'error' : 'success');
+    }
+
+    loadSectionDropdown();
+  </script>
+</body>
+
+</html>

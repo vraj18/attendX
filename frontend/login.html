@@ -1,0 +1,125 @@
+<!DOCTYPE html>
+<html lang="en">
+
+<head>
+  <meta charset="UTF-8" />
+  <meta name="viewport" content="width=device-width, initial-scale=1.0" />
+  <title>Login — Student Attendance & Registration System</title>
+  <link rel="stylesheet" href="css/style.css" />
+  <style>
+    body {
+      display: flex;
+      align-items: center;
+      justify-content: center;
+      min-height: 100vh;
+      background: var(--bg-card-hover);
+    }
+
+    .login-box {
+      background: var(--bg-card);
+      border: 1px solid var(--border);
+      border-radius: var(--radius-lg);
+      padding: 2.5rem 2rem;
+      width: 100%;
+      max-width: 400px;
+      box-shadow: var(--shadow-card);
+      text-align: center;
+    }
+
+    .role-toggle {
+      display: flex;
+      border: 1px solid var(--border);
+      border-radius: var(--radius-sm);
+      margin-bottom: 1.5rem;
+      overflow: hidden;
+    }
+
+    .role-toggle button {
+      flex: 1;
+      padding: 0.75rem;
+      border: none;
+      background: var(--bg-base);
+      color: var(--text-secondary);
+      font-weight: 600;
+      cursor: pointer;
+      transition: all var(--transition);
+    }
+
+    .role-toggle button.active {
+      background: var(--accent);
+      color: #fff;
+    }
+  </style>
+</head>
+
+<body>
+
+  <div class="login-box">
+    <div
+      style="width:50px;height:50px;background:var(--accent);color:#fff;border-radius:var(--radius-sm);display:flex;align-items:center;justify-content:center;font-size:1.5rem;margin:0 auto 1rem;">
+      🎓</div>
+    <h2 style="font-size:1.5rem;margin-bottom:.25rem;color:var(--text-primary);">VNIT Portal</h2>
+    <p style="color:var(--text-muted);font-size:.9rem;margin-bottom:2rem;">Log in to access your dashboard</p>
+
+    <div class="role-toggle">
+      <button id="btnStudent" class="active" onclick="setRole('student')">Student</button>
+      <button id="btnAdmin" onclick="setRole('admin')">Faculty / Admin</button>
+    </div>
+
+    <div class="form-group" style="text-align:left">
+      <label class="form-label">User ID</label>
+      <input type="number" id="userId" class="form-control" placeholder="Enter your ID (e.g. 100)" />
+    </div>
+
+    <button class="btn btn-primary btn-full" style="margin-top:1rem" onclick="login()">Log In</button>
+  </div>
+
+  <div class="toast-container" id="toastContainer"></div>
+
+  <script>
+    let currentRole = 'student';
+
+    function setRole(role) {
+      currentRole = role;
+      document.getElementById('btnStudent').className = role === 'student' ? 'active' : '';
+      document.getElementById('btnAdmin').className = role === 'admin' ? 'active' : '';
+      document.getElementById('userId').placeholder = role === 'student' ? 'Enter Student ID (e.g. 100)' : 'Enter Faculty ID (e.g. 1)';
+    }
+
+    async function login() {
+      const userId = document.getElementById('userId').value;
+      if (!userId) {
+        showToast('Please enter your ID', 'error');
+        return;
+      }
+
+      try {
+        const res = await fetch('http://localhost:3000/api/auth/login', {
+          method: 'POST',
+          headers: { 'Content-Type': 'application/json' },
+          body: JSON.stringify({ userId: +userId, role: currentRole })
+        });
+        const data = await res.json();
+
+        if (data.success) {
+          localStorage.setItem('currentUser', JSON.stringify(data.user));
+          window.location.href = 'index.html';
+        } else {
+          showToast(data.message, 'error');
+        }
+      } catch (e) {
+        showToast('Network error connecting to auth server', 'error');
+      }
+    }
+
+    function showToast(msg, type = 'info') {
+      const t = document.createElement('div');
+      t.className = 'toast ' + type;
+      t.innerHTML = msg;
+      document.getElementById('toastContainer').appendChild(t);
+      setTimeout(() => { t.style.animation = 'fadeOut 0.3s ease forwards'; setTimeout(() => t.remove(), 300); }, 3000);
+    }
+  </script>
+</body>
+
+</html>

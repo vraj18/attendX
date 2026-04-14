@@ -1,0 +1,502 @@
+<!DOCTYPE html>
+<html lang="en">
+
+<head>
+  <meta charset="UTF-8" />
+  <meta name="viewport" content="width=device-width, initial-scale=1.0" />
+  <title>Registration — Student Attendance & Registration System</title>
+  <meta name="description" content="Register students into course sections with full validation." />
+  <link rel="stylesheet" href="css/style.css" />
+  <script src="js/auth.js"></script>
+</head>
+
+<body>
+
+  <aside class="sidebar">
+    <div class="sidebar-logo">
+      <div class="logo-icon">🎓</div>
+      <h1>VNIT PORTAL</h1>
+      <span>Student Management System</span>
+    </div>
+    <nav class="sidebar-nav">
+      <span class="nav-section-label">Main</span>
+      <a href="index.html" class="nav-link"> Dashboard</a>
+      <a href="registration.html" class="nav-link active">Registration</a>
+      <a href="attendance.html" class="nav-link" id="nav-attendance"> Attendance</a>
+      <a href="profile.html" class="nav-link" id="nav-profile">Student Profile</a>
+      <span class="nav-section-label admin-only">Reports</span>
+      <a href="report.html" class="nav-link admin-only">Attendance Report</a>
+    </nav>
+    <div class="sidebar-footer">Oracle 21c &nbsp;•&nbsp; PL/SQL Powered</div>
+  </aside>
+
+  <main class="main-content">
+    <div class="page-header">
+      <h2 id="pageTitle">Course Registration</h2>
+      <p id="pageDesc">Manage course registrations and applications.</p>
+    </div>
+
+    <!-- Tab bar -->
+    <div
+      style="display:flex;gap:.5rem;margin-bottom:1.5rem;background:var(--bg-card);border:1px solid var(--border);border-radius:var(--radius-md);padding:.3rem;"
+      id="tabContainer">
+      <button class="btn btn-primary" id="tabRegister" onclick="showTab('register')"
+        style="flex:1;justify-content:center">📝 Apply / Register</button>
+      <button class="btn btn-ghost admin-only" id="tabPending" onclick="showTab('pending')"
+        style="flex:1;justify-content:center">⏳ Pending Approvals</button>
+      <button class="btn btn-ghost admin-only" id="tabAdmit" onclick="showTab('admit')"
+        style="flex:1;justify-content:center">➕ Admit Student</button>
+      <button class="btn btn-ghost admin-only" id="tabDrop" onclick="showTab('drop')"
+        style="flex:1;justify-content:center">🗑️ Drop Student</button>
+      <button class="btn btn-ghost" id="tabSections" onclick="showTab('sections')"
+        style="flex:1;justify-content:center">📚 All Sections</button>
+    </div>
+
+    <!-- ── Tab: Register ──────────────────────────────────── -->
+    <div id="tab-register">
+      <div class="grid-2">
+        <div class="card">
+          <div class="card-title">📝 Application & Registration</div>
+
+          <div class="form-group">
+            <label class="form-label">Student ID</label>
+            <div style="display:flex;gap:.5rem">
+              <input type="number" id="reg_studentId" class="form-control" placeholder="e.g. 1000" />
+              <button class="btn btn-ghost" id="btnStudentLookup" onclick="lookupStudent()">🔍</button>
+            </div>
+            <div id="studentInfo" style="margin-top:.5rem;font-size:.8rem;color:var(--text-muted)"></div>
+          </div>
+
+          <div class="form-group">
+            <label class="form-label">Section</label>
+            <select id="reg_sectionId" class="form-control">
+              <option value="">— Choose a section —</option>
+            </select>
+          </div>
+
+          <button class="btn btn-primary btn-full btn-lg" onclick="registerStudent()" id="btnRegister">
+            📝 Register Student
+          </button>
+        </div>
+
+        <!-- Course instances for student -->
+        <div class="card">
+          <div class="card-title">📚 Current Registrations</div>
+          <div class="form-group">
+            <label class="form-label">Session</label>
+            <select id="ci_sessionId" class="form-control" onchange="loadCourseInstances()">
+              <option value="">— Choose session —</option>
+            </select>
+          </div>
+          <button class="btn btn-ghost btn-full" onclick="loadCourseInstances()">🔄 Refresh</button>
+          <div id="courseInstances" style="margin-top:1rem">
+            <div class="empty-state">
+              <div class="empty-icon">📋</div>
+              <p>Enter student ID and select session</p>
+            </div>
+          </div>
+        </div>
+      </div>
+    </div>
+
+    <!-- ── Tab: Pending Approvals ──────────────────────────── -->
+    <div id="tab-pending" style="display:none" class="admin-only">
+      <div class="card">
+        <div class="card-title">⏳ Registration Requests</div>
+        <div class="table-wrap" id="pendingTable">
+          <div class="loading">
+            <div class="spinner"></div><span>Loading pending requests…</span>
+          </div>
+        </div>
+      </div>
+    </div>
+
+    <!-- ── Tab: Admit ─────────────────────────────────────── -->
+    <div id="tab-admit" style="display:none" class="admin-only">
+      <div class="card" style="max-width:600px">
+        <div class="card-title">➕ Admit New Student</div>
+        <!-- Admit Form Fields... -->
+        <div class="form-row">
+          <div class="form-group">
+            <label class="form-label">Full Name</label>
+            <input type="text" id="admit_name" class="form-control" placeholder="e.g. Ravi Kumar" />
+          </div>
+          <div class="form-group">
+            <label class="form-label">Email</label>
+            <input type="email" id="admit_email" class="form-control" placeholder="student@college.edu" />
+          </div>
+        </div>
+        <div class="form-row">
+          <div class="form-group">
+            <label class="form-label">Phone</label>
+            <input type="tel" id="admit_phone" class="form-control" placeholder="9XXXXXXXXX" />
+          </div>
+          <div class="form-group">
+            <label class="form-label">Date of Birth</label>
+            <input type="date" id="admit_dob" class="form-control" />
+          </div>
+        </div>
+        <div class="form-row">
+          <div class="form-group">
+            <label class="form-label">Program Level</label>
+            <select id="admit_level" class="form-control">
+              <option value="UG">UG (Undergraduate)</option>
+              <option value="PG">PG (Postgraduate)</option>
+            </select>
+          </div>
+          <div class="form-group">
+            <label class="form-label">Department</label>
+            <select id="admit_dept" class="form-control">
+              <option>Computer Science</option>
+              <option>Information Tech</option>
+              <option>Electronics</option>
+              <option>Mathematics</option>
+              <option>Mechanical</option>
+              <option>Civil</option>
+            </select>
+          </div>
+        </div>
+        <button class="btn btn-success btn-full btn-lg" onclick="admitStudent()">✅ Admit Student</button>
+      </div>
+    </div>
+
+    <!-- ── Tab: Drop ──────────────────────────────────────── -->
+    <div id="tab-drop" style="display:none" class="admin-only">
+      <div class="grid-2">
+        <div class="card">
+          <div class="card-title">🗑️ Drop from Section</div>
+          <div class="form-group">
+            <label class="form-label">Student ID</label>
+            <input type="number" id="drop_studentId" class="form-control" placeholder="e.g. 1000" />
+          </div>
+          <div class="form-group">
+            <label class="form-label">Section ID</label>
+            <input type="number" id="drop_sectionId" class="form-control" placeholder="e.g. 1" />
+          </div>
+          <div class="form-group">
+            <label class="form-label">Reason</label>
+            <input type="text" id="drop_reason" class="form-control" placeholder="Medical withdrawal…" />
+          </div>
+          <button class="btn btn-danger btn-full" onclick="dropFromSection()">🗑️ Drop from Section</button>
+        </div>
+
+        <div class="card">
+          <div class="card-title">⛔ Drop Student Entirely</div>
+          <p style="font-size:.85rem;color:var(--text-muted);margin-bottom:1rem">This will mark the student as
+            <strong>Dropped</strong> and cancel all active registrations via the database trigger.
+          </p>
+          <div class="form-group">
+            <label class="form-label">Student ID</label>
+            <input type="number" id="dropAll_studentId" class="form-control" placeholder="e.g. 1000" />
+          </div>
+          <div class="form-group">
+            <label class="form-label">Reason</label>
+            <input type="text" id="dropAll_reason" class="form-control" placeholder="Voluntary withdrawal…" />
+          </div>
+          <button class="btn btn-danger btn-full" onclick="dropStudentAll()">⛔ Drop Student Entirely</button>
+        </div>
+      </div>
+    </div>
+
+    <!-- ── Tab: Sections ──────────────────────────────────── -->
+    <div id="tab-sections" style="display:none">
+      <div class="card">
+        <div class="flex-between mb-2">
+          <div class="card-title" style="margin-bottom:0">📚 All Course Sections</div>
+          <div class="search-bar">
+            <span class="search-icon">🔍</span>
+            <input type="text" id="sectionSearch" class="form-control" placeholder="Search sections…"
+              oninput="filterSections()" style="width:220px" />
+          </div>
+        </div>
+        <div class="table-wrap" id="sectionsTable">
+          <div class="loading">
+            <div class="spinner"></div><span>Loading sections…</span>
+          </div>
+        </div>
+      </div>
+    </div>
+  </main>
+
+  <div class="toast-container" id="toastContainer"></div>
+  <script src="js/app.js"></script>
+  <script>
+    const API = 'http://localhost:3000/api';
+    let allSections = [];
+
+    // Initialize roles UI
+    if (currentUser.Role === 'student') {
+      document.querySelectorAll('.admin-only').forEach(el => el.style.display = 'none');
+      const stuInput = document.getElementById('reg_studentId');
+      stuInput.value = currentUser.ID;
+      stuInput.readOnly = true;
+      document.getElementById('btnStudentLookup').style.display = 'none';
+      document.getElementById('btnRegister').innerHTML = '📝 Submit Application';
+      setTimeout(lookupStudent, 100);
+    }
+
+    // ── Tab switching ──────────────────────────────────────────
+    function showTab(name) {
+      if (currentUser.Role !== 'admin' && ['pending', 'admit', 'drop'].includes(name)) return; // Prevent navigation
+
+      ['register', 'pending', 'admit', 'drop', 'sections'].forEach(t => {
+        const section = document.getElementById(`tab-${t}`);
+        if (section) section.style.display = t === name ? 'block' : 'none';
+
+        const btn = document.getElementById(`tab${t.charAt(0).toUpperCase() + t.slice(1)}`);
+        if (btn) {
+          btn.className = t === name ? 'btn btn-primary' : (btn.classList.contains('admin-only') ? 'btn btn-ghost admin-only' : 'btn btn-ghost');
+          btn.style.flex = '1';
+          btn.style.justifyContent = 'center';
+        }
+      });
+      if (name === 'sections') loadSectionsTable();
+      if (name === 'pending' && currentUser.Role === 'admin') loadPendingApprovals();
+    }
+
+    // ── Load dropdowns ─────────────────────────────────────────
+    async function loadDropdowns() {
+      try {
+        const [secR, sessR] = await Promise.all([
+          fetch(`${API}/registration/sections`),
+          fetch(`${API}/students/meta/sessions`)
+        ]);
+        const secD = await secR.json();
+        const sessD = await sessR.json();
+
+        if (secD.success) {
+          allSections = secD.data;
+          const sel = document.getElementById('reg_sectionId');
+          sel.innerHTML = '<option value="">— Choose a section —</option>' +
+            secD.data.map(s =>
+              `<option value="${s.SECTIONID}">${s.COURSECODE} – Sec ${s.SECTIONNAME} | Coordinator: ${s.FACULTYNAME} (${s.ENROLLEDCOUNT}/${s.MAXSTUDENTS})</option>`
+            ).join('');
+        }
+        if (sessD.success) {
+          const sel = document.getElementById('ci_sessionId');
+          sel.innerHTML = '<option value="">— Choose session —</option>' +
+            sessD.data.map(s => `<option value="${s.SESSIONID}">${s.SESSIONNAME}</option>`).join('');
+        }
+      } catch (e) { console.error('Failed to load dropdowns'); }
+    }
+
+    // ── Student lookup ─────────────────────────────────────────
+    async function lookupStudent() {
+      const id = document.getElementById('reg_studentId').value;
+      const info = document.getElementById('studentInfo');
+      if (!id) { info.textContent = 'Enter a student ID first.'; return; }
+      try {
+        const r = await fetch(`${API}/students/${id}`);
+        const d = await r.json();
+        if (d.success) {
+          info.innerHTML = `<span style="color:var(--success)">✅ ${d.data.NAME} &nbsp;|&nbsp; ${d.data.PROGRAMLEVEL} &nbsp;|&nbsp; ${d.data.STATUS}</span>`;
+        } else {
+          info.innerHTML = `<span style="color:var(--danger)">❌ ${d.message}</span>`;
+        }
+      } catch (e) { info.textContent = 'Lookup failed.'; }
+    }
+
+    // ── Load course instances ──────────────────────────────────
+    async function loadCourseInstances() {
+      const sid = document.getElementById('reg_studentId').value;
+      const sessId = document.getElementById('ci_sessionId').value;
+      const el = document.getElementById('courseInstances');
+      if (!sid || !sessId) { showToast('Enter Student ID and select a session', 'info'); return; }
+      el.innerHTML = '<div class="loading"><div class="spinner"></div></div>';
+      try {
+        const r = await fetch(`${API}/students/${sid}/courses/${sessId}`);
+        const d = await r.json();
+        if (!d.success || !d.data.length) {
+          el.innerHTML = '<div class="empty-state"><div class="empty-icon">📭</div><p>No course instances found</p></div>';
+          return;
+        }
+        el.innerHTML = d.data.map(c => `
+      <div style="padding:.7rem;background:var(--bg-input);border-radius:var(--radius-sm);margin-bottom:.5rem;border:1px solid var(--border)">
+        <div class="flex-between">
+          <div>
+            <span style="font-weight:600;font-size:.875rem">${c.COURSECODE} — ${c.COURSENAME}</span>
+            <br><span style="font-size:.75rem;color:var(--text-muted)">Sec ${c.SECTIONNAME} &nbsp;|&nbsp; ${c.FACULTYNAME} &nbsp;|&nbsp; ${c.ROOM || '—'}</span>
+          </div>
+          <span class="badge badge-${c.REGSTATUS === 'Registered' ? 'success' : (c.REGSTATUS === 'Pending' ? 'warning' : 'danger')}">${c.REGSTATUS}</span>
+        </div>
+        ${c.SLOT1 ? `<div style="font-size:.72rem;color:var(--text-muted);margin-top:.3rem">🕐 ${c.SLOT1}${c.SLOT2 ? ' &nbsp;|&nbsp; 🕐 ' + c.SLOT2 : ''}</div>` : ''}
+      </div>`).join('');
+      } catch (e) { el.innerHTML = '<div class="empty-state"><p>Error fetching data</p></div>'; }
+    }
+
+    // ── Register student ───────────────────────────────────────
+    async function registerStudent() {
+      const studentId = document.getElementById('reg_studentId').value;
+      const sectionId = document.getElementById('reg_sectionId').value;
+
+      if (!studentId || !sectionId) { showToast('Fill in Student ID and select a section', 'info'); return; }
+      const performedByRole = currentUser.Role;
+
+      try {
+        const r = await fetch(`${API}/registration/register`, {
+          method: 'POST',
+          headers: { 'Content-Type': 'application/json' },
+          body: JSON.stringify({ studentId: +studentId, sectionId: +sectionId, performedBy: performedByRole })
+        });
+        const d = await r.json();
+        showToast(d.message, d.success ? 'success' : 'error');
+        if (d.success) {
+          loadDropdowns();
+          if (document.getElementById('ci_sessionId').value) loadCourseInstances();
+        }
+      } catch (e) { showToast('Network error', 'error'); }
+    }
+
+    // ── Pending Approvals ───────────────────────────────────────
+    async function loadPendingApprovals() {
+      const wrap = document.getElementById('pendingTable');
+      wrap.innerHTML = '<div class="loading"><div class="spinner"></div></div>';
+      try {
+        const r = await fetch(`${API}/registration/pending`);
+        const d = await r.json();
+        if (!d.success || !d.data.length) {
+          wrap.innerHTML = '<div class="empty-state"><div class="empty-icon">✅</div><p>No pending approvals</p></div>';
+          return;
+        }
+        wrap.innerHTML = `<table>
+      <thead><tr>
+        <th>Date</th><th>Student</th><th>Course</th><th>Section</th><th>Action</th>
+      </tr></thead>
+      <tbody>${d.data.map(p => `<tr>
+        <td style="font-size:0.8rem">${new Date(p.REGISTRATIONDATE).toLocaleDateString()}</td>
+        <td><strong>${p.STUDENTNAME}</strong><br><span style="font-size:0.75rem;color:var(--text-muted)">ID: ${p.STUDENTID}</span></td>
+        <td>${p.COURSECODE} - ${p.COURSENAME}</td>
+        <td>Sec ${p.SECTIONNAME}<br><span style="font-size:0.75rem;color:var(--text-muted)">Coord: ${p.FACULTYNAME}</span></td>
+        <td>
+          <div style="display:flex;gap:.5rem">
+          <button class="btn btn-success btn-sm" onclick="approveRegistration(${p.REGISTRATIONID}, 'Registered')">Approve</button>
+          <button class="btn btn-danger btn-sm" onclick="approveRegistration(${p.REGISTRATIONID}, 'Rejected')">Reject</button>
+          </div>
+        </td>
+      </tr>`).join('')}</tbody>
+    </table>`;
+      } catch (e) { wrap.innerHTML = '<div class="empty-state"><p>Error fetching pending</p></div>'; }
+    }
+
+    async function approveRegistration(regId, status) {
+      try {
+        const r = await fetch(`${API}/registration/approve`, {
+          method: 'POST',
+          headers: { 'Content-Type': 'application/json' },
+          body: JSON.stringify({ registrationId: regId, status })
+        });
+        const d = await r.json();
+        showToast(d.message, d.success ? 'success' : 'error');
+        if (d.success) loadPendingApprovals();
+      } catch (e) { showToast('Network error', 'error'); }
+    }
+
+    // ── Admit student ──────────────────────────────────────────
+    async function admitStudent() {
+      const body = {
+        name: document.getElementById('admit_name').value,
+        email: document.getElementById('admit_email').value,
+        phone: document.getElementById('admit_phone').value,
+        dob: document.getElementById('admit_dob').value,
+        level: document.getElementById('admit_level').value,
+        department: document.getElementById('admit_dept').value,
+      };
+      if (!body.name || !body.email || !body.dob) { showToast('Fill all required fields', 'info'); return; }
+      try {
+        const r = await fetch(`${API}/students/admit`, {
+          method: 'POST', headers: { 'Content-Type': 'application/json' }, body: JSON.stringify(body)
+        });
+        const d = await r.json();
+        showToast(d.message, d.success ? 'success' : 'error');
+      } catch (e) { showToast('Network error', 'error'); }
+    }
+
+    // ── Drop from section ──────────────────────────────────────
+    async function dropFromSection() {
+      const body = {
+        studentId: +document.getElementById('drop_studentId').value,
+        sectionId: +document.getElementById('drop_sectionId').value,
+        reason: document.getElementById('drop_reason').value
+      };
+      try {
+        const r = await fetch(`${API}/registration/drop-section`, {
+          method: 'POST', headers: { 'Content-Type': 'application/json' }, body: JSON.stringify(body)
+        });
+        const d = await r.json();
+        showToast(d.message, d.success ? 'success' : 'error');
+      } catch (e) { showToast('Network error', 'error'); }
+    }
+
+    // ── Drop student entirely ──────────────────────────────────
+    async function dropStudentAll() {
+      const sid = document.getElementById('dropAll_studentId').value;
+      const reason = document.getElementById('dropAll_reason').value;
+      if (!sid) { showToast('Enter student ID', 'info'); return; }
+      if (!confirm(`Drop student ${sid} entirely from the institution?`)) return;
+      try {
+        const r = await fetch(`${API}/students/drop`, {
+          method: 'POST', headers: { 'Content-Type': 'application/json' },
+          body: JSON.stringify({ studentId: +sid, reason })
+        });
+        const d = await r.json();
+        showToast(d.message, d.success ? 'success' : 'error');
+      } catch (e) { showToast('Network error', 'error'); }
+    }
+
+    // ── Sections table ─────────────────────────────────────────
+    async function loadSectionsTable() {
+      const wrap = document.getElementById('sectionsTable');
+      try {
+        const r = await fetch(`${API}/registration/sections`);
+        const d = await r.json();
+        if (!d.success || !d.data.length) { wrap.innerHTML = '<div class="empty-state"><p>No sections found</p></div>'; return; }
+        allSections = d.data;
+        renderSectionsTable(allSections);
+      } catch (e) { wrap.innerHTML = '<div class="empty-state"><p>Backend not reachable</p></div>'; }
+    }
+
+    function renderSectionsTable(data) {
+      const wrap = document.getElementById('sectionsTable');
+      wrap.innerHTML = `<table>
+    <thead><tr>
+      <th>Section ID</th><th>Course</th><th>Section</th><th>Session</th>
+      <th>Faculty Coordinator</th><th>Room</th><th>Slot 1</th><th>Enrolled</th><th>Level</th>
+    </tr></thead>
+    <tbody>${data.map(s => `<tr>
+      <td><span style="color:var(--accent)">#${s.SECTIONID}</span></td>
+      <td><strong>${s.COURSECODE}</strong><br><span style="font-size:.75rem;color:var(--text-muted)">${s.COURSENAME}</span></td>
+      <td>${s.SECTIONNAME}</td>
+      <td>${s.SESSIONNAME}</td>
+      <td><span style="font-weight:600">Coordinator:</span> ${s.FACULTYNAME}</td>
+      <td>${s.ROOM || '—'}</td>
+      <td>${s.SLOT1 || '—'}</td>
+      <td>
+        <div class="flex-center">
+          ${s.ENROLLEDCOUNT}/${s.MAXSTUDENTS}
+          <div class="progress-bar-wrap" style="width:60px">
+            <div class="progress-bar ${s.ENROLLEDCOUNT / s.MAXSTUDENTS >= .9 ? 'red' : s.ENROLLEDCOUNT / s.MAXSTUDENTS >= .7 ? 'yellow' : 'green'}"
+                 style="width:${Math.round(s.ENROLLEDCOUNT / s.MAXSTUDENTS * 100)}%"></div>
+          </div>
+        </div>
+      </td>
+      <td><span class="badge badge-${s.COURSELEVEL === 'PG' ? 'purple' : s.COURSELEVEL === 'BOTH' ? 'warning' : 'info'}">${s.COURSELEVEL}</span></td>
+    </tr>`).join('')}
+    </tbody></table>`;
+    }
+
+    function filterSections() {
+      const q = document.getElementById('sectionSearch').value.toLowerCase();
+      renderSectionsTable(allSections.filter(s =>
+        s.COURSENAME.toLowerCase().includes(q) ||
+        s.COURSECODE.toLowerCase().includes(q) ||
+        s.FACULTYNAME.toLowerCase().includes(q) ||
+        s.SECTIONNAME.toLowerCase().includes(q)
+      ));
+    }
+
+    // Initial Boot
+    loadDropdowns();
+  </script>
+</body>
+
+</html>

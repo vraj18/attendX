@@ -1,0 +1,205 @@
+<!DOCTYPE html>
+<html lang="en">
+
+<head>
+  <meta charset="UTF-8" />
+  <meta name="viewport" content="width=device-width, initial-scale=1.0" />
+  <title>Attendance Report — Student Attendance & Registration System</title>
+  <meta name="description" content="Section-wise attendance report with per-student percentage breakdown." />
+  <link rel="stylesheet" href="css/style.css" />
+  <script src="js/auth.js"></script>
+</head>
+
+<body>
+
+  <aside class="sidebar">
+    <div class="sidebar-logo">
+      <div class="logo-icon">🎓</div>
+      <h1>VNIT PORTAL</h1>
+      <span>Student Management System</span>
+    </div>
+    <nav class="sidebar-nav">
+      <span class="nav-section-label">Main</span>
+      <a href="index.html" class="nav-link">Dashboard</a>
+      <a href="registration.html" class="nav-link"> Registration</a>
+      <a href="attendance.html" class="nav-link">Attendance</a>
+      <a href="profile.html" class="nav-link"> Student Profile</a>
+      <span class="nav-section-label admin-only">Reports</span>
+      <a href="report.html" class="nav-link active admin-only" id="nav-report">Attendance Report</a>
+    </nav>
+    <div class="sidebar-footer">Oracle 21c &nbsp;•&nbsp; PL/SQL Powered</div>
+  </aside>
+  <script>
+    if (currentUser && currentUser.Role === 'student') {
+      window.location.href = 'index.html';
+    }
+  </script>
+
+  <main class="main-content">
+    <div class="page-header">
+      <h2>Attendance Report</h2>
+      <p>Section-wise attendance summary — identify at-risk students</p>
+    </div>
+
+    <!-- Section selector -->
+    <div class="card mb-2">
+      <div style="display:flex;gap:.75rem;align-items:flex-end">
+        <div class="form-group" style="margin:0;flex:1">
+          <label class="form-label">Select Section</label>
+          <select id="rep_section" class="form-control">
+            <option value="">— Choose a section —</option>
+          </select>
+        </div>
+        <button class="btn btn-primary" onclick="loadReport()">📈 Generate Report</button>
+      </div>
+    </div>
+
+    <!-- Summary row -->
+    <div id="reportSummary" style="display:none" class="stats-grid" style="margin-bottom:1.5rem">
+      <div class="stat-card green">
+        <div class="stat-icon green">✅</div>
+        <div class="stat-value" id="repAbove75">—</div>
+        <div class="stat-label">≥ 75% Attendance</div>
+      </div>
+      <div class="stat-card orange">
+        <div class="stat-icon orange">⚠️</div>
+        <div class="stat-value" id="repBelow75">—</div>
+        <div class="stat-label">&lt; 75% (At Risk)</div>
+      </div>
+      <div class="stat-card purple">
+        <div class="stat-icon purple">👥</div>
+        <div class="stat-value" id="repTotal">—</div>
+        <div class="stat-label">Total Students</div>
+      </div>
+      <div class="stat-card blue">
+        <div class="stat-icon blue">📊</div>
+        <div class="stat-value" id="repAvg">—%</div>
+        <div class="stat-label">Section Average</div>
+      </div>
+    </div>
+
+    <!-- Report table -->
+    <div id="reportSection" style="display:none">
+      <div class="card">
+        <div class="flex-between mb-2">
+          <div class="card-title" style="margin-bottom:0" id="reportTitle">Section Report</div>
+          <div style="display:flex;gap:.5rem">
+            <button class="btn btn-ghost btn-sm" onclick="filterReport('all')">All</button>
+            <button class="btn btn-ghost btn-sm" onclick="filterReport('risk')">⚠️ At Risk (&lt;75%)</button>
+            <button class="btn btn-ghost btn-sm" onclick="filterReport('good')">✅ ≥ 75%</button>
+          </div>
+        </div>
+        <div class="table-wrap" id="reportTable"></div>
+      </div>
+    </div>
+  </main>
+
+  <div class="toast-container" id="toastContainer"></div>
+  <script src="js/app.js"></script>
+  <script>
+    const API = 'http://localhost:3000/api';
+    let reportData = [];
+
+    async function loadSections() {
+      try {
+        const r = await fetch(`${API}/registration/sections`);
+        const d = await r.json();
+        if (!d.success) return;
+        const sel = document.getElementById('rep_section');
+        sel.innerHTML = '<option value="">— Choose a section —</option>' +
+          d.data.map(s =>
+            `<option value="${s.SECTIONID}" data-label="${s.COURSECODE} – Sec ${s.SECTIONNAME} | ${s.SESSIONNAME}">
+          ${s.COURSECODE} – Sec ${s.SECTIONNAME} | ${s.SESSIONNAME}
+        </option>`
+          ).join('');
+      } catch (e) { }
+    }
+
+    async function loadReport() {
+      const secId = document.getElementById('rep_section').value;
+      if (!secId) { showToast('Select a section first', 'info'); return; }
+      const wrap = document.getElementById('reportTable');
+      wrap.innerHTML = '<div class="loading"><div class="spinner"></div><span>Generating report…</span></div>';
+      document.getElementById('reportSection').style.display = 'block';
+
+      try {
+        const r = await fetch(`${API}/attendance/report/${secId}`);
+        const d = await r.json();
+        if (!d.success) { wrap.innerHTML = '<div class="empty-state"><p>Error loading report</p></div>'; return; }
+
+        reportData = d.data;
+
+        // Summary stats
+        const total = reportData.length;
+        const above75 = reportData.filter(s => (s.PERCENTAGE || 0) >= 75).length;
+        const avg = total ? reportData.reduce((a, c) => a + (c.PERCENTAGE || 0), 0) / total : 0;
+
+        document.getElementById('reportSummary').style.display = 'grid';
+        document.getElementById('repAbove75').textContent = above75;
+        document.getElementById('repBelow75').textContent = total - above75;
+        document.getElementById('repTotal').textContent = total;
+        document.getElementById('repAvg').textContent = avg.toFixed(1) + '%';
+
+        // Section label
+        const opt = document.getElementById('rep_section').selectedOptions[0];
+        document.getElementById('reportTitle').textContent = '📈 ' + (opt?.dataset.label || 'Section Report');
+
+        renderTable(reportData);
+      } catch (e) { wrap.innerHTML = '<div class="empty-state"><p>Backend not reachable</p></div>'; }
+    }
+
+    function renderTable(data) {
+      const wrap = document.getElementById('reportTable');
+      if (!data.length) {
+        wrap.innerHTML = '<div class="empty-state"><div class="empty-icon">📭</div><p>No students in this section</p></div>';
+        return;
+      }
+      wrap.innerHTML = `<table>
+    <thead><tr>
+      <th>#</th><th>Student</th><th>ID</th><th>Present</th>
+      <th>Total Classes</th><th>Attendance %</th><th>Status</th>
+    </tr></thead>
+    <tbody>${data.map((s, i) => {
+        const pct = s.PERCENTAGE || 0;
+        const color = pct >= 75 ? 'var(--success)' : pct >= 50 ? 'var(--warning)' : 'var(--danger)';
+        const bar = pct >= 75 ? 'green' : pct >= 50 ? 'yellow' : 'red';
+        return `<tr>
+        <td style="color:var(--text-muted)">${i + 1}</td>
+        <td>
+          <div style="display:flex;align-items:center;gap:.6rem">
+            <div style="width:32px;height:32px;border-radius:50%;background:var(--grad-primary);display:flex;align-items:center;justify-content:center;font-weight:700;font-size:.8rem">${s.STUDENTNAME.charAt(0)}</div>
+            ${s.STUDENTNAME}
+          </div>
+        </td>
+        <td style="color:var(--accent);font-weight:600">${s.STUDENTID}</td>
+        <td>${s.PRESENT || 0}</td>
+        <td>${s.TOTAL || 0}</td>
+        <td style="min-width:160px">
+          <div style="display:flex;align-items:center;gap:.5rem">
+            <div class="progress-bar-wrap" style="flex:1">
+              <div class="progress-bar ${bar}" style="width:${pct}%"></div>
+            </div>
+            <span style="font-size:.85rem;font-weight:700;min-width:42px;text-align:right;color:${color}">${pct}%</span>
+          </div>
+        </td>
+        <td>${pct >= 75
+            ? '<span class="badge badge-success">✅ Good</span>'
+            : pct >= 50
+              ? '<span class="badge badge-warning">⚠️ Average</span>'
+              : '<span class="badge badge-danger">🚨 At Risk</span>'
+          }</td>
+      </tr>`;
+      }).join('')}</tbody></table>`;
+    }
+
+    function filterReport(type) {
+      if (type === 'all') renderTable(reportData);
+      if (type === 'risk') renderTable(reportData.filter(s => (s.PERCENTAGE || 0) < 75));
+      if (type === 'good') renderTable(reportData.filter(s => (s.PERCENTAGE || 0) >= 75));
+    }
+
+    loadSections();
+  </script>
+</body>
+
+</html>
