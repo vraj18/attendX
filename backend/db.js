@@ -6,8 +6,8 @@ const oracledb = require('oracledb');
 
 // ── CONFIGURE THESE ──────────────────────────────────────────
 const DB_CONFIG = {
-  user:             process.env.DB_USER     || 'system',
-  password:         process.env.DB_PASSWORD || 'oracle123',
+  user:             'system',
+  password:         'oracle123',
   connectString:    process.env.DB_CONNECT  || 'localhost:1521/XE',
   poolMin:  2,
   poolMax:  10,
@@ -46,4 +46,4 @@ async function close() {
   if (pool) await pool.close(0);
 }
 
-module.exports = { init, execute, close };
+module.exports = { init, execute, close, getPool: () => pool };

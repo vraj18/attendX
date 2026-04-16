@@ -106,11 +106,25 @@
       return new Date().toISOString().slice(0, 10);
     }
     document.getElementById('att_date').value = today();
+    if (currentUser) {
+      if (currentUser.Role !== 'admin') {
+        document.querySelectorAll('.admin-only').forEach(el => el.style.display = 'none');
+      }
+      if (currentUser.Role === 'faculty') {
+        const facInput = document.getElementById('att_faculty');
+        facInput.value = currentUser.ID;
+        facInput.disabled = true;
+      }
+    }
 
     // ── Load sections into dropdown ────────────────────────────
     async function loadSectionDropdown() {
       try {
-        const r = await fetch(`${API}/registration/sections`);
+        let endpoint = `${API}/registration/sections`;
+        if (currentUser.Role === 'faculty') {
+          endpoint = `${API}/registration/my-sections/${currentUser.ID}`;
+        }
+        const r = await fetch(endpoint);
         const d = await r.json();
         if (!d.success) return;
         const sel = document.getElementById('att_section');

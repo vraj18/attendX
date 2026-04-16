@@ -41,7 +41,7 @@ app.use((err, req, res, next) => {
   try {
     await db.init();
     app.listen(PORT, () => {
-      console.log(`🚀  Server running at http://localhost:${PORT}`);
+      console.log(`Server running at http://localhost:${PORT}`);
     });
   } catch (err) {
     console.error('Failed to start server:', err);

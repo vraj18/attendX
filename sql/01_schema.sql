@@ -11,7 +11,7 @@ BEGIN
     WHERE table_name IN (
       'ADMISSION_DROP_LOG','ATTENDANCE','STUDENT_REGISTRATIONS',
       'BATCHES','SECTIONS','COURSE_INSTANCES','FACULTY',
-      'STUDENTS','COURSES','SESSIONS'
+      'STUDENTS','COURSES','SESSIONS','ADMINS'
     )
   ) LOOP
     EXECUTE IMMEDIATE 'DROP TABLE ' || t.table_name || ' CASCADE CONSTRAINTS';
@@ -48,7 +48,19 @@ CREATE TABLE FACULTY (
     Designation     VARCHAR2(100)   DEFAULT 'Assistant Professor'
         CONSTRAINT CHK_FACULTY_DESIG CHECK (Designation IN (
             'Professor','Associate Professor','Assistant Professor','Lecturer'
-        ))
+        )),
+    Password        VARCHAR2(100)   DEFAULT 'pass123'
+)
+STORAGE (INITIAL 64K NEXT 64K);
+
+-- =============================================================
+-- 2b. ADMINS
+-- =============================================================
+CREATE TABLE ADMINS (
+    Name            VARCHAR2(150)   NOT NULL,
+    Email           VARCHAR2(200)   NOT NULL
+        CONSTRAINT UQ_ADMINS_EMAIL UNIQUE,
+    Password        VARCHAR2(100)   DEFAULT 'pass123'
 )
 STORAGE (INITIAL 64K NEXT 64K);
 
@@ -65,7 +77,13 @@ CREATE TABLE COURSES (
         CONSTRAINT CHK_CREDITS CHECK (Credits BETWEEN 1 AND 6),
     Department      VARCHAR2(100)   NOT NULL,
     CourseLevel     VARCHAR2(10)    NOT NULL
-        CONSTRAINT CHK_COURSE_LEVEL CHECK (CourseLevel IN ('UG','PG','BOTH'))
+        CONSTRAINT CHK_COURSE_LEVEL CHECK (CourseLevel IN ('UG','PG','BOTH')),
+    SemesterType    VARCHAR2(6)     DEFAULT 'Both'
+        CONSTRAINT CHK_COURSE_SEM_TYPE CHECK (SemesterType IN ('Odd','Even','Both')),
+    CourseCategory  VARCHAR2(5)     NOT NULL
+        CONSTRAINT CHK_COURSE_CAT CHECK (CourseCategory IN ('DC','DE','OC','HM')),
+    RecommendedYear NUMBER(1)       NOT NULL
+        CONSTRAINT CHK_COURSE_YEAR CHECK (RecommendedYear BETWEEN 1 AND 4)
 )
 STORAGE (INITIAL 64K NEXT 64K);
 
@@ -75,14 +93,20 @@ STORAGE (INITIAL 64K NEXT 64K);
 -- =============================================================
 CREATE TABLE STUDENTS (
     StudentID       NUMBER(10)      CONSTRAINT PK_STUDENTS PRIMARY KEY,
+    RollNumber      VARCHAR2(20)    NOT NULL CONSTRAINT UQ_STUDENT_ROLL UNIQUE,
+    Password        VARCHAR2(100)   DEFAULT 'pass123',
     Name            VARCHAR2(150)   NOT NULL,
     Email           VARCHAR2(200)   NOT NULL
         CONSTRAINT UQ_STUDENT_EMAIL UNIQUE,
     Phone           VARCHAR2(15),
     DOB             DATE            NOT NULL,
-    ProgramLevel    VARCHAR2(5)     NOT NULL
+    Branch          VARCHAR2(10)    NOT NULL
+        CONSTRAINT CHK_STUDENT_BRANCH CHECK (Branch IN ('CSE','ECE','EEE','MEC')),
+    BatchYear       NUMBER(4)       NOT NULL,
+    CurrentYear     NUMBER(1)       NOT NULL
+        CONSTRAINT CHK_STUDENT_YEAR CHECK (CurrentYear BETWEEN 1 AND 4),
+    ProgramLevel    VARCHAR2(10)    DEFAULT 'UG' NOT NULL
         CONSTRAINT CHK_STUDENT_LEVEL CHECK (ProgramLevel IN ('UG','PG')),
-    Department      VARCHAR2(100)   NOT NULL,
     AdmissionDate   DATE            DEFAULT SYSDATE NOT NULL,
     Status          VARCHAR2(10)    DEFAULT 'Active'
         CONSTRAINT CHK_STUDENT_STATUS CHECK (Status IN ('Active','Dropped','Graduated'))
@@ -122,6 +146,7 @@ CREATE TABLE SECTIONS (
     Room            VARCHAR2(50),
     Slot1           VARCHAR2(50),                       -- e.g. 09:00-10:30
     Slot2           VARCHAR2(50),                       -- optional 2nd slot same day
+    EnrolledCount   NUMBER(4)       DEFAULT 0,
     MaxStudents     NUMBER(4)       DEFAULT 60
         CONSTRAINT CHK_SEC_MAXSTUDENTS CHECK (MaxStudents > 0),
     CONSTRAINT UQ_SECTION_NAME UNIQUE (InstanceID, SectionName)
@@ -159,6 +184,8 @@ CREATE TABLE STUDENT_REGISTRATIONS (
     RegistrationDate DATE           DEFAULT SYSDATE NOT NULL,
     RegStatus       VARCHAR2(15)    DEFAULT 'Pending'
         CONSTRAINT CHK_REG_STATUS CHECK (RegStatus IN ('Pending','Registered','Dropped','Waitlisted','Rejected')),
+    Grade           VARCHAR2(3)     NULL
+        CONSTRAINT CHK_REG_GRADE CHECK (Grade IN ('AA','AB','BB','BC','CC','CD','DD','W','FF','LL') OR Grade IS NULL),
     CONSTRAINT UQ_STUDENT_SECTION UNIQUE (StudentID, SectionID)
 )
 STORAGE (INITIAL 64K NEXT 64K);

@@ -9,7 +9,10 @@ async function patchDb() {
     console.log('Applying Table Check Constraint Alteration...');
     await db.execute(`ALTER TABLE STUDENT_REGISTRATIONS DROP CONSTRAINT CHK_REG_STATUS`);
     await db.execute(`ALTER TABLE STUDENT_REGISTRATIONS ADD CONSTRAINT CHK_REG_STATUS CHECK (RegStatus IN ('Pending','Registered','Dropped','Waitlisted','Rejected'))`);
-    console.log('✅ Altered STUDENT_REGISTRATIONS table successfully.');
+    await db.execute(`ALTER TABLE COURSES ADD SemesterType VARCHAR2(6) DEFAULT 'Both'`);
+    await db.execute(`ALTER TABLE STUDENT_REGISTRATIONS ADD Grade VARCHAR2(3)`);
+    await db.execute(`ALTER TABLE STUDENT_REGISTRATIONS ADD CONSTRAINT CHK_REG_GRADE CHECK (Grade IN ('AA','AB','BB','BC','CC','CD','DD','W','FF','LL') OR Grade IS NULL)`);
+    console.log('✅ Altered STUDENT_REGISTRATIONS and COURSES tables successfully.');
 
     console.log('Applying PKG_REGISTRATION update...');
     const sqlFile = path.join(__dirname, '..', 'sql', '06_pkg_registration.sql');

@@ -13,12 +13,41 @@ const router   = express.Router();
 
 // GET /api/registration/sections
 router.get('/sections', async (req, res) => {
+  const { studentId } = req.query;
   try {
+    let studentBranch = null;
+    let studentYear = null;
+    let passedCourseIds = [];
+
+    // If studentId provided, fetch their context for filtering
+    if (studentId) {
+      const studentRes = await db.execute(
+        `SELECT Branch, CurrentYear FROM STUDENTS WHERE StudentID = :id`,
+        [studentId]
+      );
+      if (studentRes.rows.length > 0) {
+        studentBranch = studentRes.rows[0].BRANCH;
+        studentYear   = studentRes.rows[0].CURRENTYEAR;
+      }
+
+      const passedRes = await db.execute(
+        `SELECT ci.CourseID 
+         FROM STUDENT_REGISTRATIONS sr
+         JOIN SECTIONS sec ON sr.SectionID = sec.SectionID
+         JOIN COURSE_INSTANCES ci ON sec.InstanceID = ci.InstanceID
+         WHERE sr.StudentID = :id AND sr.RegStatus = 'Registered' 
+         AND sr.Grade IN ('AA','AB','BB','BC','CC','CD','DD')`,
+        [studentId]
+      );
+      passedCourseIds = passedRes.rows.map(r => r.COURSEID);
+    }
+
     const result = await db.execute(
       `SELECT sec.SectionID, sec.SectionName, sec.Room,
               sec.Slot1, sec.Slot2, sec.MaxStudents,
-              ci.InstanceID,
+              ci.InstanceID, ci.CourseID,
               c.CourseCode, c.CourseName, c.CourseLevel, c.Credits,
+              c.CourseCategory, c.RecommendedYear, c.Department as CourseBranch,
               s.SessionID, s.SessionName,
               f.Name AS FacultyName,
               (SELECT COUNT(*) FROM STUDENT_REGISTRATIONS sr
@@ -29,9 +58,31 @@ router.get('/sections', async (req, res) => {
        JOIN COURSES c           ON ci.CourseID    = c.CourseID
        JOIN SESSIONS s          ON ci.SessionID   = s.SessionID
        JOIN FACULTY f           ON sec.FacultyID  = f.FacultyID
+       WHERE s.IsActive = 'Y'
        ORDER BY c.CourseName, sec.SectionName`
     );
-    res.json({ success: true, data: result.rows });
+
+    let sections = result.rows;
+
+    // Apply Filters if student context exists
+    if (studentId) {
+      sections = sections.filter(sec => {
+        // 1. Level Check (no senior year courses)
+        if (sec.RECOMMENDEDYEAR > studentYear) return false;
+
+        // 2. Branch Check (DC/DE must match student branch)
+        if (['DC', 'DE'].includes(sec.COURSECATEGORY)) {
+           if (sec.COURSEBRANCH !== studentBranch) return false;
+        }
+
+        // 3. Passed Check
+        if (passedCourseIds.includes(sec.COURSEID)) return false;
+
+        return true;
+      });
+    }
+
+    res.json({ success: true, data: sections });
   } catch (err) {
     res.status(500).json({ success: false, message: err.message });
   }
@@ -57,8 +108,21 @@ router.get('/sections/:id', async (req, res) => {
 
 // POST /api/registration/register
 router.post('/register', async (req, res) => {
-  const { studentId, sectionId, performedBy } = req.body;
+  let { studentId, sectionId, performedBy } = req.body;
+  
   try {
+    // If studentId is not a number, assume it's a RollNumber and look it up
+    if (isNaN(studentId)) {
+      const studentRes = await db.execute(
+        `SELECT StudentID FROM STUDENTS WHERE RollNumber = :roll`,
+        { roll: req.body.studentId }
+      );
+      if (studentRes.rows.length === 0) {
+        return res.status(404).json({ success: false, message: 'Roll Number not found' });
+      }
+      studentId = studentRes.rows[0].STUDENTID;
+    }
+
     const result = await db.execute(
       `BEGIN PKG_REGISTRATION.SP_REGISTER_STUDENT(:sid, :secid, :by, :rid, :msg); END;`,
       {
@@ -99,9 +163,18 @@ router.get('/student/:id', async (req, res) => {
   try {
     const result = await db.execute(
       `SELECT sr.RegistrationID, sr.RegStatus, sr.RegistrationDate,
+              sr.Grade,
               sec.SectionID, sec.SectionName, sec.Room, sec.Slot1, sec.Slot2,
               c.CourseCode, c.CourseName, c.Credits, c.CourseLevel,
-              s.SessionName, f.Name AS FacultyName,
+              c.SemesterType AS CourseParity,
+              s.SessionName,
+              CASE
+                WHEN INSTR(UPPER(s.SessionName), 'ODD') > 0 THEN 'Odd'
+                WHEN INSTR(UPPER(s.SessionName), 'EVEN') > 0 THEN 'Even'
+                ELSE 'Both'
+              END AS SessionParity,
+              s.IsActive AS IsSessionActive,
+              f.Name AS FacultyName,
               PKG_ATTENDANCE.FN_GET_PERCENTAGE(sr.StudentID, sec.SectionID) AS AttendancePct
        FROM STUDENT_REGISTRATIONS sr
        JOIN SECTIONS           sec ON sr.SectionID   = sec.SectionID

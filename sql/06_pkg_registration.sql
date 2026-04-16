@@ -35,10 +35,13 @@ CREATE OR REPLACE PACKAGE PKG_REGISTRATION AS
         p_Email       IN  VARCHAR2,
         p_Phone       IN  VARCHAR2,
         p_DOB         IN  DATE,
-        p_Level       IN  VARCHAR2,
-        p_Department  IN  VARCHAR2,
+        p_Branch      IN  VARCHAR2,
+        p_BatchYear   IN  NUMBER,
+        p_CurrentYear IN  NUMBER,
+        p_ProgramLevel IN  VARCHAR2,
         p_PerformedBy IN  VARCHAR2,
         p_StudentID   OUT NUMBER,
+        p_RollNumber  OUT VARCHAR2,
         p_Message     OUT VARCHAR2
     );
 
@@ -69,17 +72,27 @@ CREATE OR REPLACE PACKAGE BODY PKG_REGISTRATION AS
         v_student_status   STUDENTS.Status%TYPE;
         v_student_level    STUDENTS.ProgramLevel%TYPE;
         v_course_level     COURSES.CourseLevel%TYPE;
+        v_course_parity    COURSES.SemesterType%TYPE;
+        v_course_cat       COURSES.CourseCategory%TYPE;
+        v_course_year      COURSES.RecommendedYear%TYPE;
+        v_course_branch    COURSES.Department%TYPE;
+        v_student_branch   STUDENTS.Branch%TYPE;
+        v_student_year     STUDENTS.CurrentYear%TYPE;
         v_session_active   SESSIONS.IsActive%TYPE;
+        v_session_parity   VARCHAR2(50);
+        v_course_id        COURSE_INSTANCES.CourseID%TYPE;
         v_section_max      SECTIONS.MaxStudents%TYPE;
         v_enrolled_count   NUMBER;
         v_dup_count        NUMBER;
-        v_instance_id      COURSE_INSTANCES.InstanceID%TYPE;
         v_dup_instance     NUMBER;
+        v_passed_count     NUMBER;
+        v_backlog_count    NUMBER;
+        v_instance_id      COURSE_INSTANCES.InstanceID%TYPE;
     BEGIN
         -- 1. Student must exist and be Active
         BEGIN
-            SELECT Status, ProgramLevel
-            INTO   v_student_status, v_student_level
+            SELECT Status, ProgramLevel, Branch, CurrentYear
+            INTO   v_student_status, v_student_level, v_student_branch, v_student_year
             FROM   STUDENTS
             WHERE  StudentID = p_StudentID;
         EXCEPTION WHEN NO_DATA_FOUND THEN
@@ -92,9 +105,13 @@ CREATE OR REPLACE PACKAGE BODY PKG_REGISTRATION AS
 
         -- 2. Get section → instance → course → session
         BEGIN
-            SELECT ci.InstanceID, c.CourseLevel, s.IsActive,
+            SELECT ci.InstanceID, ci.CourseID, c.CourseLevel, c.SemesterType, 
+                   c.CourseCategory, c.RecommendedYear, c.Department,
+                   s.IsActive, s.SessionName,
                    sec.MaxStudents
-            INTO   v_instance_id, v_course_level, v_session_active,
+            INTO   v_instance_id, v_course_id, v_course_level, v_course_parity,
+                   v_course_cat, v_course_year, v_course_branch,
+                   v_session_active, v_session_parity,
                    v_section_max
             FROM   SECTIONS           sec
             JOIN   COURSE_INSTANCES   ci  ON sec.InstanceID = ci.InstanceID
@@ -104,6 +121,52 @@ CREATE OR REPLACE PACKAGE BODY PKG_REGISTRATION AS
         EXCEPTION WHEN NO_DATA_FOUND THEN
             RETURN 'ERROR: Section ID ' || p_SectionID || ' not found.';
         END;
+
+        v_session_parity := CASE
+            WHEN INSTR(UPPER(v_session_parity), 'ODD') > 0 THEN 'Odd'
+            WHEN INSTR(UPPER(v_session_parity), 'EVEN') > 0 THEN 'Even'
+            ELSE 'Both'
+        END;
+
+        IF v_course_parity != 'Both' AND v_session_parity != v_course_parity THEN
+            RETURN 'ERROR: Course is offered only in ' || v_course_parity || ' semesters.';
+        END IF;
+
+        -- 2b. Branch Matching for DC/DE
+        IF v_course_cat IN ('DC','DE') AND v_course_branch != v_student_branch THEN
+            RETURN 'ERROR: This course is restricted to ' || v_course_branch || ' students.';
+        END IF;
+
+        -- 2c. Year Level Restriction
+        IF v_course_year > v_student_year THEN
+            RETURN 'ERROR: Senior year courses (' || v_course_year || ') are not available for you.';
+        END IF;
+
+        SELECT COUNT(*) INTO v_passed_count
+        FROM   STUDENT_REGISTRATIONS sr
+        JOIN   SECTIONS          sec ON sr.SectionID = sec.SectionID
+        JOIN   COURSE_INSTANCES ci  ON sec.InstanceID = ci.InstanceID
+        WHERE  sr.StudentID = p_StudentID
+          AND  ci.CourseID   = v_course_id
+          AND  sr.RegStatus != 'Dropped'
+          AND  sr.Grade IN ('AA','AB','BB','BC','CC','CD','DD');
+
+        IF v_passed_count > 0 THEN
+            RETURN 'ERROR: Student has already passed this course and cannot register again.';
+        END IF;
+
+        SELECT COUNT(*) INTO v_backlog_count
+        FROM   STUDENT_REGISTRATIONS sr
+        JOIN   SECTIONS          sec ON sr.SectionID = sec.SectionID
+        JOIN   COURSE_INSTANCES ci  ON sec.InstanceID = ci.InstanceID
+        WHERE  sr.StudentID = p_StudentID
+          AND  ci.CourseID   = v_course_id
+          AND  sr.RegStatus != 'Dropped'
+          AND  sr.Grade IN ('W','FF','LL');
+
+        IF v_backlog_count > 0 AND v_course_parity != 'Both' AND v_session_parity != v_course_parity THEN
+            RETURN 'ERROR: Backlog retake for this course is allowed only in ' || v_course_parity || ' semesters.';
+        END IF;
 
         -- 3. Session must be active
         IF v_session_active != 'Y' THEN
@@ -180,10 +243,9 @@ CREATE OR REPLACE PACKAGE BODY PKG_REGISTRATION AS
         -- Insert registration
         v_reg_id := SEQ_REGISTRATIONS.NEXTVAL;
         
-        IF p_PerformedBy = 'admin' THEN
-            v_init_status := 'Registered';
-        END IF;
-
+        -- Admin and Student both start as Pending now. 
+        -- (User specified only Faculty can approve)
+        
         INSERT INTO STUDENT_REGISTRATIONS (
             RegistrationID, StudentID, SectionID, RegistrationDate, RegStatus
         ) VALUES (
@@ -248,15 +310,24 @@ CREATE OR REPLACE PACKAGE BODY PKG_REGISTRATION AS
         p_Email       IN  VARCHAR2,
         p_Phone       IN  VARCHAR2,
         p_DOB         IN  DATE,
-        p_Level       IN  VARCHAR2,
-        p_Department  IN  VARCHAR2,
+        p_Branch      IN  VARCHAR2,
+        p_BatchYear   IN  NUMBER,
+        p_CurrentYear IN  NUMBER,
+        p_ProgramLevel IN  VARCHAR2,
         p_PerformedBy IN  VARCHAR2,
         p_StudentID   OUT NUMBER,
+        p_RollNumber  OUT VARCHAR2,
         p_Message     OUT VARCHAR2
     ) AS
         v_sid    NUMBER;
         v_dup    NUMBER;
+        v_roll   VARCHAR2(20);
     BEGIN
+        -- Generate Roll Number: bt + batch_year_suffix + branch + next_id
+        -- e.g. bt23cse101
+        SELECT SEQ_STUDENTS.NEXTVAL INTO v_sid FROM DUAL;
+        v_roll := 'bt' || SUBSTR(TO_CHAR(p_BatchYear), 3, 2) || LOWER(p_Branch) || TO_CHAR(v_sid);
+
         -- Check duplicate email
         SELECT COUNT(*) INTO v_dup FROM STUDENTS WHERE Email = p_Email;
         IF v_dup > 0 THEN
@@ -265,14 +336,12 @@ CREATE OR REPLACE PACKAGE BODY PKG_REGISTRATION AS
             RETURN;
         END IF;
 
-        v_sid := SEQ_STUDENTS.NEXTVAL;
-
         INSERT INTO STUDENTS (
-            StudentID, Name, Email, Phone, DOB,
-            ProgramLevel, Department, AdmissionDate, Status
+            StudentID, RollNumber, Name, Email, Phone, DOB,
+            Branch, BatchYear, CurrentYear, ProgramLevel, AdmissionDate, Status
         ) VALUES (
-            v_sid, p_Name, p_Email, p_Phone, p_DOB,
-            UPPER(p_Level), p_Department, SYSDATE, 'Active'
+            v_sid, v_roll, p_Name, p_Email, p_Phone, p_DOB,
+            p_Branch, p_BatchYear, p_CurrentYear, p_ProgramLevel, SYSDATE, 'Active'
         );
 
         -- Trigger TRG_STUDENT_ADMISSION_STATUS will fire on this insert:
@@ -284,8 +353,9 @@ CREATE OR REPLACE PACKAGE BODY PKG_REGISTRATION AS
         );
 
         COMMIT;
-        p_StudentID := v_sid;
-        p_Message   := 'SUCCESS: Student admitted. StudentID=' || v_sid;
+        p_StudentID  := v_sid;
+        p_RollNumber := v_roll;
+        p_Message    := 'SUCCESS: Student admitted. RollNumber=' || v_roll;
 
     EXCEPTION WHEN OTHERS THEN
         ROLLBACK;

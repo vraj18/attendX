@@ -15,8 +15,8 @@ const router = express.Router();
 router.get('/', async (req, res) => {
   try {
     const result = await db.execute(
-      `SELECT StudentID, Name, Email, Phone, ProgramLevel,
-              Department, AdmissionDate, Status
+      `SELECT StudentID, RollNumber, Name, Email, Phone,
+              Branch AS Department, BatchYear, CurrentYear, AdmissionDate, Status, ProgramLevel
        FROM STUDENTS
        ORDER BY Name`
     );
@@ -30,8 +30,12 @@ router.get('/', async (req, res) => {
 router.get('/:id', async (req, res) => {
   try {
     const result = await db.execute(
-      `SELECT * FROM STUDENTS WHERE StudentID = :id`,
-      [req.params.id]
+      `SELECT StudentID, RollNumber, Name, Email, Phone, 
+              Branch AS Department, BatchYear, CurrentYear, 
+              AdmissionDate, Status, ProgramLevel
+       FROM STUDENTS 
+       WHERE RollNumber = :id OR CAST(StudentID AS VARCHAR2(20)) = :id`,
+      { id: req.params.id }
     );
     if (!result.rows.length)
       return res.status(404).json({ success: false, message: 'Student not found' });
@@ -56,25 +60,45 @@ router.get('/:id/courses/:sessionId', async (req, res) => {
 
 // POST /api/students/admit
 router.post('/admit', async (req, res) => {
-  const { name, email, phone, dob, level, department, performedBy } = req.body;
-  try {
-    const result = await db.execute(
-      `BEGIN
-         PKG_REGISTRATION.SP_ADMIT_STUDENT(
-           :name, :email, :phone, TO_DATE(:dob,'YYYY-MM-DD'),
-           :level, :dept, :by, :sid, :msg
-         );
-       END;`,
-      {
-        name, email, phone, dob, level, dept: department, by: performedBy || 'webui',
-        sid: { dir: oracledb.BIND_OUT, type: oracledb.NUMBER },
-        msg: { dir: oracledb.BIND_OUT, type: oracledb.STRING, maxSize: 500 }
-      }
-    );
+    const { name, email, phone, dob, programLevel, department, performedBy } = req.body;
+    try {
+      // Use native Date object for better type safety with Oracle
+      const dobDate = dob ? new Date(dob) : null;
+      
+      const result = await db.execute(
+        `BEGIN
+           PKG_REGISTRATION.SP_ADMIT_STUDENT(
+             p_Name         => :name,
+             p_Email        => :email,
+             p_Phone        => :phone,
+             p_DOB          => :dobDate,
+             p_Branch       => :branch,
+             p_BatchYear    => :batch,
+             p_CurrentYear  => :curYear,
+             p_ProgramLevel => :progLevel,
+             p_PerformedBy  => :by,
+             p_StudentID    => :sid,
+             p_RollNumber   => :roll,
+             p_Message      => :msg
+           );
+         END;`,
+        {
+          name, email, phone, dobDate,
+          branch: req.body.branch, 
+          batch: Number(req.body.batchYear), 
+          curYear: Number(req.body.currentYear),
+          progLevel: programLevel || 'UG',
+          by: performedBy || 'webui',
+          sid: { dir: oracledb.BIND_OUT, type: oracledb.NUMBER },
+          roll: { dir: oracledb.BIND_OUT, type: oracledb.STRING, maxSize: 50 },
+          msg: { dir: oracledb.BIND_OUT, type: oracledb.STRING, maxSize: 500 }
+        }
+      );
     const msg = result.outBinds.msg;
     const sid = result.outBinds.sid;
-    const ok  = msg.startsWith('SUCCESS');
-    res.status(ok ? 200 : 400).json({ success: ok, message: msg, studentId: sid });
+    const roll = result.outBinds.roll;
+    const ok  = msg.startsWith('SUCCESS') || !msg.includes('ERROR');
+    res.status(ok ? 200 : 400).json({ success: ok, message: msg, studentId: sid, rollNumber: roll });
   } catch (err) {
     res.status(500).json({ success: false, message: err.message });
   }

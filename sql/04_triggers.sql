@@ -73,4 +73,39 @@ BEGIN
 END;
 /
 
+
+-- -------------------------------------------------------
+-- Trigger 3: Maintain SECTIONS.EnrolledCount
+-- Business Rule: Automatically sync the count when 
+--                registrations are added, dropped or 
+--                approved.
+-- -------------------------------------------------------
+CREATE OR REPLACE TRIGGER TRG_UPDATE_SECTION_ENROLLMENT
+AFTER INSERT OR UPDATE OR DELETE ON STUDENT_REGISTRATIONS
+FOR EACH ROW
+BEGIN
+    -- Handle Deletion or Status Change away from 'Registered'
+    IF DELETING OR (UPDATING AND :OLD.RegStatus = 'Registered' AND :NEW.RegStatus != 'Registered') THEN
+        UPDATE SECTIONS 
+        SET    EnrolledCount = EnrolledCount - 1
+        WHERE  SectionID = :OLD.SectionID;
+    END IF;
+
+    -- Handle Insertion or Status Change to 'Registered'
+    IF INSERTING THEN
+        IF :NEW.RegStatus = 'Registered' THEN
+            UPDATE SECTIONS 
+            SET    EnrolledCount = EnrolledCount + 1
+            WHERE  SectionID = :NEW.SectionID;
+        END IF;
+    ELSIF UPDATING THEN
+        IF :OLD.RegStatus != 'Registered' AND :NEW.RegStatus = 'Registered' THEN
+            UPDATE SECTIONS 
+            SET    EnrolledCount = EnrolledCount + 1
+            WHERE  SectionID = :NEW.SectionID;
+        END IF;
+    END IF;
+END;
+/
+
 PROMPT Triggers created successfully.

@@ -51,7 +51,7 @@
     <!-- Stats -->
     <div class="stats-grid" id="statsGrid">
       <div class="stat-card purple">
-        <div class="stat-icon purple" id="icon1">👨‍🎓</div>
+        <div class="stat-icon purple" id="icon1">👨‍</div>
         <div class="stat-value" id="stat1">—</div>
         <div class="stat-label" id="label1">Active Students</div>
       </div>
@@ -76,7 +76,7 @@
     <div class="grid-2">
       <!-- Left Card -->
       <div class="card">
-        <div class="card-title" id="leftCardTitle">👨‍🎓 Recent Students</div>
+        <div class="card-title" id="leftCardTitle">👨‍ Recent Students</div>
         <div id="leftList">
           <div class="loading">
             <div class="spinner"></div><span>Loading…</span>
@@ -105,11 +105,19 @@
     async function initDashboard() {
       if (!currentUser) return;
       
+      if (currentUser.Role === 'student') {
+        document.querySelectorAll('.admin-only').forEach(el => el.style.display = 'none');
+      } else if (currentUser.Role === 'faculty') {
+        document.querySelectorAll('.admin-only').forEach(el => el.style.display = 'none');
+      }
+
       document.getElementById('welcomeTitle').innerText = `Welcome, ${currentUser.NAME}`;
       
       if (currentUser.Role === 'student') {
         setupStudentDashboard();
-      } else {
+      } else if (currentUser.Role === 'faculty') {
+        setupFacultyDashboard();
+      } else if (currentUser.Role === 'admin') {
         setupAdminDashboard();
       }
     }
@@ -133,23 +141,43 @@
       loadMyCourses(currentUser.ID);
     }
 
-    async function setupAdminDashboard() {
+    async function setupFacultyDashboard() {
       // Configure Labels
       document.getElementById('label1').innerText = 'Students Under Me';
-      document.getElementById('icon1').innerText  = '👨‍🎓';
-      document.getElementById('label2').innerText = 'Active Sections';
+      document.getElementById('icon1').innerText  = '👨‍';
+      document.getElementById('label2').innerText = 'My Sections';
       document.getElementById('icon2').innerText  = '📚';
       document.getElementById('label3').innerText = 'Today\'s Attendance';
       document.getElementById('icon3').innerText  = '✅';
       document.getElementById('label4').innerText = 'Pending Approvals';
       document.getElementById('icon4').innerText  = '⏳';
 
-      document.getElementById('leftCardTitle').innerText  = '👩‍🎓 Enrolled Students';
+      document.getElementById('leftCardTitle').innerText  = '👩‍ Enrolled Students';
       document.getElementById('rightCardTitle').innerText = '📂 My Assigned Sections';
 
-      loadPersonalStats('admin', currentUser.ID);
-      loadAllStudents(); // Admins see global recent students for now or specific if needed
+      // Load Faculty specific lists (using API endpoint with Faculty ID if we had a specific list, otherwise just generic load)
+      loadPersonalStats('faculty', currentUser.ID);
+      loadAllStudents(); // Optionally show students only from their classes
       loadMySections(currentUser.ID);
+    }
+
+    async function setupAdminDashboard() {
+      // Configure Labels
+      document.getElementById('label1').innerText = 'Active Students';
+      document.getElementById('icon1').innerText  = '👨‍';
+      document.getElementById('label2').innerText = 'Active Sessions';
+      document.getElementById('icon2').innerText  = '📅';
+      document.getElementById('label3').innerText = 'Total Registrations';
+      document.getElementById('icon3').innerText  = '📋';
+      document.getElementById('label4').innerText = 'Today\'s Attendance';
+      document.getElementById('icon4').innerText  = '✅';
+
+      document.getElementById('leftCardTitle').innerText  = '👨‍ All Students';
+      document.getElementById('rightCardTitle').innerText = '📚 All Sections';
+
+      loadPersonalStats('admin', currentUser.ID);
+      loadAllStudents();
+      loadAllSections();
     }
 
     async function loadPersonalStats(role, id) {
@@ -162,11 +190,16 @@
             animateCount('stat2', d.data.attendancePercent, '%');
             animateCount('stat3', d.data.totalSessions);
             animateCount('stat4', d.data.pendingRegs);
-          } else {
+          } else if (role === 'faculty') {
             animateCount('stat1', d.data.studentsUnderMe);
             animateCount('stat2', d.data.mySections);
             animateCount('stat3', d.data.todayAttendance);
             animateCount('stat4', d.data.pendingApprovals);
+          } else if (role === 'admin') {
+            animateCount('stat1', d.data.activeStudents);
+            animateCount('stat2', d.data.activeSessions);
+            animateCount('stat3', d.data.totalRegistrations);
+            animateCount('stat4', d.data.todayAttendance);
           }
         }
       } catch (e) { showToast('Stats unavailable', 'error'); }
@@ -229,9 +262,9 @@
             <div style="width:32px;height:32px;background:var(--accent);color:#fff;border-radius:50%;display:flex;align-items:center;justify-content:center;font-size:.8rem;font-weight:600">${s.NAME.charAt(0)}</div>
             <div style="flex:1">
                <div style="font-size:.875rem;font-weight:600">${s.NAME}</div>
-               <div style="font-size:.7rem;color:var(--text-muted)">${s.DEPARTMENT} • ID: ${s.STUDENTID}</div>
+               <div style="font-size:.7rem;color:var(--text-muted)">${s.BRANCH} • Roll: ${s.ROLLNUMBER}</div>
             </div>
-            <span class="badge badge-gray">${s.PROGRAMLEVEL}</span>
+            <span class="badge badge-gray">Yr ${s.CURRENTYEAR}</span>
           </div>`).join('');
       } catch(e) { el.innerHTML = emptyState('Error'); }
     }
@@ -252,6 +285,23 @@
             <div class="progress-bar-wrap" style="margin-top:0.4rem">
               <div class="progress-bar ${s.ENROLLEDCOUNT/s.MAXSTUDENTS >= 0.9 ? 'red' : 'green'}" style="width:${(s.ENROLLEDCOUNT/s.MAXSTUDENTS)*100}%"></div>
             </div>
+          </div>`).join('');
+      } catch(e) { el.innerHTML = emptyState('Error'); }
+    }
+
+    async function loadAllSections() {
+      const el = document.getElementById('rightList');
+      try {
+        const r = await fetch(`${API}/registration/sections`);
+        const d = await r.json();
+        if (!d.success || !d.data.length) { el.innerHTML = emptyState('No sections found'); return; }
+        el.innerHTML = d.data.slice(0, 6).map(s => `
+          <div style="padding:.75rem 0;border-bottom:1px solid var(--border)">
+            <div class="flex-between">
+              <div style="font-weight:600;font-size:0.875rem">${s.COURSECODE} — Sec ${s.SECTIONNAME}</div>
+              <span style="font-size:0.75rem">${s.ENROLLEDCOUNT} / ${s.MAXSTUDENTS}</span>
+            </div>
+            <div style="font-size:.75rem;color:var(--text-muted)">${s.SESSIONNAME} &nbsp;|&nbsp; ${s.FACULTYNAME}</div>
           </div>`).join('');
       } catch(e) { el.innerHTML = emptyState('Error'); }
     }

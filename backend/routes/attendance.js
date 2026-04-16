@@ -159,7 +159,7 @@ router.get('/dashboard/stats', async (req, res) => {
           pendingRegs: pendingRegs.rows[0].CNT
         }
       });
-    } else if (role === 'admin' && id) {
+    } else if (role === 'faculty' && id) {
       const studentsUnderMe = await db.execute(
         `SELECT COUNT(DISTINCT StudentID) AS CNT 
          FROM STUDENT_REGISTRATIONS sr
@@ -195,7 +195,7 @@ router.get('/dashboard/stats', async (req, res) => {
           pendingApprovals: pendingApprovals.rows[0].CNT
         }
       });
-    } else {
+    } else if (role === 'admin') {
       // Default Global Stats
       const students = await db.execute(`SELECT COUNT(*) AS CNT FROM STUDENTS WHERE Status='Active'`);
       const sessions = await db.execute(`SELECT COUNT(*) AS CNT FROM SESSIONS WHERE IsActive='Y'`);
@@ -210,6 +210,8 @@ router.get('/dashboard/stats', async (req, res) => {
           todayAttendance:   att.rows[0].CNT
         }
       });
+    } else {
+      res.status(400).json({ success: false, message: 'Invalid stats request' });
     }
   } catch (err) {
     res.status(500).json({ success: false, message: err.message });

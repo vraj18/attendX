@@ -8,23 +8,37 @@ router.post('/login', async (req, res) => {
   try {
     if (role === 'student') {
       const result = await db.execute(
-        `SELECT StudentID as Id, Name, Email FROM STUDENTS WHERE StudentID = :id`,
-        [parseInt(userId)]
+        `SELECT StudentID as Id, Name, Email, RollNumber, Branch, CurrentYear 
+         FROM STUDENTS WHERE RollNumber = :id AND Password = :pass`,
+        [userId, req.body.password]
       );
       if (result.rows.length > 0) {
         res.json({ success: true, user: { ...result.rows[0], Role: 'student' } });
       } else {
-        res.status(401).json({ success: false, message: 'Student ID not found' });
+        res.status(401).json({ success: false, message: 'Invalid Roll Number or Password' });
+      }
+    } else if (role === 'faculty') {
+      const result = await db.execute(
+        `SELECT FacultyID as Id, Name, Email, Designation FROM FACULTY 
+         WHERE FacultyID = :id AND Password = :pass`,
+        [parseInt(userId), req.body.password]
+      );
+      if (result.rows.length > 0) {
+        res.json({ success: true, user: { ...result.rows[0], Role: 'faculty' } });
+      } else {
+        res.status(401).json({ success: false, message: 'Invalid Faculty ID or Password' });
       }
     } else if (role === 'admin') {
       const result = await db.execute(
-        `SELECT FacultyID as Id, Name, Email, Designation FROM FACULTY WHERE FacultyID = :id`,
-        [parseInt(userId)]
+        `SELECT Name, Email FROM ADMINS 
+         WHERE Email = :id AND Password = :pass`,
+        [userId, req.body.password]
       );
       if (result.rows.length > 0) {
-        res.json({ success: true, user: { ...result.rows[0], Role: 'admin' } });
+        // Admin ID is effectively their email for simple identification
+        res.json({ success: true, user: { ...result.rows[0], Id: result.rows[0].EMAIL, Role: 'admin' } });
       } else {
-        res.status(401).json({ success: false, message: 'Faculty Admin ID not found' });
+        res.status(401).json({ success: false, message: 'Invalid Admin Credentials' });
       }
     } else {
       res.status(400).json({ success: false, message: 'Invalid role specified' });

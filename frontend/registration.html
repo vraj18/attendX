@@ -41,28 +41,28 @@
       style="display:flex;gap:.5rem;margin-bottom:1.5rem;background:var(--bg-card);border:1px solid var(--border);border-radius:var(--radius-md);padding:.3rem;"
       id="tabContainer">
       <button class="btn btn-primary" id="tabRegister" onclick="showTab('register')"
-        style="flex:1;justify-content:center">📝 Apply / Register</button>
-      <button class="btn btn-ghost admin-only" id="tabPending" onclick="showTab('pending')"
-        style="flex:1;justify-content:center">⏳ Pending Approvals</button>
+        style="flex:1;justify-content:center">Apply / Register</button>
+      <button class="btn btn-ghost faculty-admin" id="tabPending" onclick="showTab('pending')"
+        style="flex:1;justify-content:center">Pending Approvals</button>
       <button class="btn btn-ghost admin-only" id="tabAdmit" onclick="showTab('admit')"
-        style="flex:1;justify-content:center">➕ Admit Student</button>
+        style="flex:1;justify-content:center">Admit Student</button>
       <button class="btn btn-ghost admin-only" id="tabDrop" onclick="showTab('drop')"
-        style="flex:1;justify-content:center">🗑️ Drop Student</button>
+        style="flex:1;justify-content:center">Drop Student</button>
       <button class="btn btn-ghost" id="tabSections" onclick="showTab('sections')"
-        style="flex:1;justify-content:center">📚 All Sections</button>
+        style="flex:1;justify-content:center">All Sections</button>
     </div>
 
     <!-- ── Tab: Register ──────────────────────────────────── -->
     <div id="tab-register">
       <div class="grid-2">
         <div class="card">
-          <div class="card-title">📝 Application & Registration</div>
+          <div class="card-title">Application & Registration</div>
 
           <div class="form-group">
-            <label class="form-label">Student ID</label>
+            <label class="form-label">Roll Number</label>
             <div style="display:flex;gap:.5rem">
-              <input type="number" id="reg_studentId" class="form-control" placeholder="e.g. 1000" />
-              <button class="btn btn-ghost" id="btnStudentLookup" onclick="lookupStudent()">🔍</button>
+              <input type="text" id="reg_studentId" class="form-control" placeholder="e.g. bt23cse101" />
+              <button class="btn btn-ghost" id="btnStudentLookup" onclick="lookupStudent()">[Search]</button>
             </div>
             <div id="studentInfo" style="margin-top:.5rem;font-size:.8rem;color:var(--text-muted)"></div>
           </div>
@@ -75,13 +75,13 @@
           </div>
 
           <button class="btn btn-primary btn-full btn-lg" onclick="registerStudent()" id="btnRegister">
-            📝 Register Student
+            Register Student
           </button>
         </div>
 
         <!-- Course instances for student -->
         <div class="card">
-          <div class="card-title">📚 Current Registrations</div>
+          <div class="card-title">Current Registrations</div>
           <div class="form-group">
             <label class="form-label">Session</label>
             <select id="ci_sessionId" class="form-control" onchange="loadCourseInstances()">
@@ -100,9 +100,9 @@
     </div>
 
     <!-- ── Tab: Pending Approvals ──────────────────────────── -->
-    <div id="tab-pending" style="display:none" class="admin-only">
+    <div id="tab-pending" style="display:none" class="faculty-admin">
       <div class="card">
-        <div class="card-title">⏳ Registration Requests</div>
+        <div class="card-title">Registration Requests</div>
         <div class="table-wrap" id="pendingTable">
           <div class="loading">
             <div class="spinner"></div><span>Loading pending requests…</span>
@@ -114,7 +114,7 @@
     <!-- ── Tab: Admit ─────────────────────────────────────── -->
     <div id="tab-admit" style="display:none" class="admin-only">
       <div class="card" style="max-width:600px">
-        <div class="card-title">➕ Admit New Student</div>
+        <div class="card-title">Admit New Student</div>
         <!-- Admit Form Fields... -->
         <div class="form-row">
           <div class="form-group">
@@ -136,27 +136,32 @@
             <input type="date" id="admit_dob" class="form-control" />
           </div>
         </div>
-        <div class="form-row">
           <div class="form-group">
-            <label class="form-label">Program Level</label>
-            <select id="admit_level" class="form-control">
-              <option value="UG">UG (Undergraduate)</option>
-              <option value="PG">PG (Postgraduate)</option>
+            <label class="form-label">Branch</label>
+            <select id="admit_branch" class="form-control">
+              <option value="CSE">CSE (Computer Science)</option>
+              <option value="ECE">ECE (Electronics)</option>
+              <option value="EEE">EEE (Electrical)</option>
+              <option value="MEC">MEC (Mechanical)</option>
             </select>
           </div>
           <div class="form-group">
-            <label class="form-label">Department</label>
-            <select id="admit_dept" class="form-control">
-              <option>Computer Science</option>
-              <option>Information Tech</option>
-              <option>Electronics</option>
-              <option>Mathematics</option>
-              <option>Mechanical</option>
-              <option>Civil</option>
+            <label class="form-label">Current Year</label>
+            <select id="admit_year" class="form-control">
+              <option value="1">1st Year</option>
+              <option value="2">2nd Year</option>
+              <option value="3">3rd Year</option>
+              <option value="4">4th Year</option>
             </select>
           </div>
         </div>
-        <button class="btn btn-success btn-full btn-lg" onclick="admitStudent()">✅ Admit Student</button>
+        <div class="form-row">
+          <div class="form-group">
+            <label class="form-label">Batch Year</label>
+            <input type="number" id="admit_batch" class="form-control" placeholder="e.g. 2023" />
+          </div>
+        </div>
+        <button class="btn btn-success btn-full btn-lg" onclick="admitStudent()">[Success] Admit Student</button>
       </div>
     </div>
 
@@ -164,10 +169,10 @@
     <div id="tab-drop" style="display:none" class="admin-only">
       <div class="grid-2">
         <div class="card">
-          <div class="card-title">🗑️ Drop from Section</div>
+          <div class="card-title">Drop from Section</div>
           <div class="form-group">
-            <label class="form-label">Student ID</label>
-            <input type="number" id="drop_studentId" class="form-control" placeholder="e.g. 1000" />
+            <label class="form-label">Student Roll Number</label>
+            <input type="text" id="drop_studentId" class="form-control" placeholder="e.g. bt23cse101" />
           </div>
           <div class="form-group">
             <label class="form-label">Section ID</label>
@@ -177,23 +182,23 @@
             <label class="form-label">Reason</label>
             <input type="text" id="drop_reason" class="form-control" placeholder="Medical withdrawal…" />
           </div>
-          <button class="btn btn-danger btn-full" onclick="dropFromSection()">🗑️ Drop from Section</button>
+          <button class="btn btn-danger btn-full" onclick="dropFromSection()">[Delete] Drop from Section</button>
         </div>
 
         <div class="card">
-          <div class="card-title">⛔ Drop Student Entirely</div>
+          <div class="card-title">Drop Student Entirely</div>
           <p style="font-size:.85rem;color:var(--text-muted);margin-bottom:1rem">This will mark the student as
             <strong>Dropped</strong> and cancel all active registrations via the database trigger.
           </p>
           <div class="form-group">
-            <label class="form-label">Student ID</label>
-            <input type="number" id="dropAll_studentId" class="form-control" placeholder="e.g. 1000" />
+            <label class="form-label">Student Roll Number</label>
+            <input type="text" id="dropAll_studentId" class="form-control" placeholder="e.g. bt23cse101" />
           </div>
           <div class="form-group">
             <label class="form-label">Reason</label>
             <input type="text" id="dropAll_reason" class="form-control" placeholder="Voluntary withdrawal…" />
           </div>
-          <button class="btn btn-danger btn-full" onclick="dropStudentAll()">⛔ Drop Student Entirely</button>
+          <button class="btn btn-danger btn-full" onclick="dropStudentAll()">[Blocked] Drop Student Entirely</button>
         </div>
       </div>
     </div>
@@ -202,7 +207,7 @@
     <div id="tab-sections" style="display:none">
       <div class="card">
         <div class="flex-between mb-2">
-          <div class="card-title" style="margin-bottom:0">📚 All Course Sections</div>
+          <div class="card-title" style="margin-bottom:0"> All Course Sections</div>
           <div class="search-bar">
             <span class="search-icon">🔍</span>
             <input type="text" id="sectionSearch" class="form-control" placeholder="Search sections…"
@@ -227,17 +232,25 @@
     // Initialize roles UI
     if (currentUser.Role === 'student') {
       document.querySelectorAll('.admin-only').forEach(el => el.style.display = 'none');
+      document.querySelectorAll('.faculty-admin').forEach(el => el.style.display = 'none');
       const stuInput = document.getElementById('reg_studentId');
-      stuInput.value = currentUser.ID;
+      stuInput.value = currentUser.ROLLNUMBER;
       stuInput.readOnly = true;
       document.getElementById('btnStudentLookup').style.display = 'none';
-      document.getElementById('btnRegister').innerHTML = '📝 Submit Application';
+      document.getElementById('btnRegister').innerHTML = '[Apply/Register] Submit Application';
       setTimeout(lookupStudent, 100);
+    } else if (currentUser.Role === 'faculty') {
+      document.querySelectorAll('.admin-only').forEach(el => el.style.display = 'none');
+      // Faculty is allowed to approve pending and load their sections.
+      showTab('pending');
+    } else if (currentUser.Role === 'admin') {
+      // Admin sees everything
     }
 
     // ── Tab switching ──────────────────────────────────────────
     function showTab(name) {
-      if (currentUser.Role !== 'admin' && ['pending', 'admit', 'drop'].includes(name)) return; // Prevent navigation
+      if (currentUser.Role === 'student' && ['pending', 'admit', 'drop'].includes(name)) return;
+      if (currentUser.Role === 'faculty' && ['admit', 'drop', 'register'].includes(name)) return;
 
       ['register', 'pending', 'admit', 'drop', 'sections'].forEach(t => {
         const section = document.getElementById(`tab-${t}`);
@@ -245,20 +258,27 @@
 
         const btn = document.getElementById(`tab${t.charAt(0).toUpperCase() + t.slice(1)}`);
         if (btn) {
-          btn.className = t === name ? 'btn btn-primary' : (btn.classList.contains('admin-only') ? 'btn btn-ghost admin-only' : 'btn btn-ghost');
+          let btnClass = 'btn btn-ghost';
+          if (btn.classList.contains('admin-only')) btnClass += ' admin-only';
+          if (btn.classList.contains('faculty-admin')) btnClass += ' faculty-admin';
+          btn.className = t === name ? 'btn btn-primary' : btnClass;
           btn.style.flex = '1';
           btn.style.justifyContent = 'center';
         }
       });
       if (name === 'sections') loadSectionsTable();
-      if (name === 'pending' && currentUser.Role === 'admin') loadPendingApprovals();
+      if (name === 'pending' && (currentUser.Role === 'admin' || currentUser.Role === 'faculty')) loadPendingApprovals();
     }
 
     // ── Load dropdowns ─────────────────────────────────────────
     async function loadDropdowns() {
       try {
+        const url = currentUser.Role === 'student' 
+          ? `${API}/registration/sections?studentId=${currentUser.ID}`
+          : `${API}/registration/sections`;
+          
         const [secR, sessR] = await Promise.all([
-          fetch(`${API}/registration/sections`),
+          fetch(url),
           fetch(`${API}/students/meta/sessions`)
         ]);
         const secD = await secR.json();
@@ -289,7 +309,7 @@
         const r = await fetch(`${API}/students/${id}`);
         const d = await r.json();
         if (d.success) {
-          info.innerHTML = `<span style="color:var(--success)">✅ ${d.data.NAME} &nbsp;|&nbsp; ${d.data.PROGRAMLEVEL} &nbsp;|&nbsp; ${d.data.STATUS}</span>`;
+          info.innerHTML = `<span style="color:var(--success)">[Success] ${d.data.NAME} &nbsp;|&nbsp; ${d.data.PROGRAMLEVEL} &nbsp;|&nbsp; ${d.data.STATUS}</span>`;
         } else {
           info.innerHTML = `<span style="color:var(--danger)">❌ ${d.message}</span>`;
         }
@@ -336,7 +356,7 @@
         const r = await fetch(`${API}/registration/register`, {
           method: 'POST',
           headers: { 'Content-Type': 'application/json' },
-          body: JSON.stringify({ studentId: +studentId, sectionId: +sectionId, performedBy: performedByRole })
+          body: JSON.stringify({ studentId: studentId, sectionId: +sectionId, performedBy: performedByRole })
         });
         const d = await r.json();
         showToast(d.message, d.success ? 'success' : 'error');
@@ -355,7 +375,7 @@
         const r = await fetch(`${API}/registration/pending`);
         const d = await r.json();
         if (!d.success || !d.data.length) {
-          wrap.innerHTML = '<div class="empty-state"><div class="empty-icon">✅</div><p>No pending approvals</p></div>';
+          wrap.innerHTML = '<div class="empty-state"><div class="empty-icon">[Success]</div><p>No pending approvals</p></div>';
           return;
         }
         wrap.innerHTML = `<table>
@@ -398,8 +418,9 @@
         email: document.getElementById('admit_email').value,
         phone: document.getElementById('admit_phone').value,
         dob: document.getElementById('admit_dob').value,
-        level: document.getElementById('admit_level').value,
-        department: document.getElementById('admit_dept').value,
+        branch: document.getElementById('admit_branch').value,
+        currentYear: +document.getElementById('admit_year').value,
+        batchYear: +document.getElementById('admit_batch').value,
       };
       if (!body.name || !body.email || !body.dob) { showToast('Fill all required fields', 'info'); return; }
       try {
@@ -447,7 +468,10 @@
     async function loadSectionsTable() {
       const wrap = document.getElementById('sectionsTable');
       try {
-        const r = await fetch(`${API}/registration/sections`);
+        const url = currentUser.Role === 'student' 
+          ? `${API}/registration/sections?studentId=${currentUser.ID}`
+          : `${API}/registration/sections`;
+        const r = await fetch(url);
         const d = await r.json();
         if (!d.success || !d.data.length) { wrap.innerHTML = '<div class="empty-state"><p>No sections found</p></div>'; return; }
         allSections = d.data;
@@ -459,14 +483,14 @@
       const wrap = document.getElementById('sectionsTable');
       wrap.innerHTML = `<table>
     <thead><tr>
-      <th>Section ID</th><th>Course</th><th>Section</th><th>Session</th>
-      <th>Faculty Coordinator</th><th>Room</th><th>Slot 1</th><th>Enrolled</th><th>Level</th>
+      <th>Section ID</th><th>Course</th><th>Cat</th><th>Year</th><th>Section</th><th>Session</th>
+      <th>Faculty Coordinator</th><th>Room</th><th>Slot 1</th><th>Enrolled</th>
     </tr></thead>
     <tbody>${data.map(s => `<tr>
       <td><span style="color:var(--accent)">#${s.SECTIONID}</span></td>
       <td><strong>${s.COURSECODE}</strong><br><span style="font-size:.75rem;color:var(--text-muted)">${s.COURSENAME}</span></td>
-      <td>${s.SECTIONNAME}</td>
-      <td>${s.SESSIONNAME}</td>
+      <td><span class="badge badge-ghost">${s.COURSECATEGORY}</span></td>
+      <td>${s.RECOMMENDEDYEAR}</td>
       <td><span style="font-weight:600">Coordinator:</span> ${s.FACULTYNAME}</td>
       <td>${s.ROOM || '—'}</td>
       <td>${s.SLOT1 || '—'}</td>
