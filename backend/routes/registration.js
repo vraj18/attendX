@@ -97,6 +97,7 @@ router.get('/sections/:id', async (req, res) => {
        FROM STUDENT_REGISTRATIONS sr
        JOIN STUDENTS st ON sr.StudentID = st.StudentID
        WHERE sr.SectionID = :id
+         AND TRIM(UPPER(sr.RegStatus)) = 'REGISTERED'
        ORDER BY st.Name`,
       [req.params.id]
     );

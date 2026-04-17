@@ -10,6 +10,7 @@ const studentsRouter     = require('./routes/students');
 const registrationRouter = require('./routes/registration');
 const attendanceRouter   = require('./routes/attendance');
 const authRouter         = require('./routes/auth');
+const coursesRouter      = require('./routes/courses');
 
 const app  = express();
 const PORT = process.env.PORT || 3000;
@@ -25,6 +26,7 @@ app.use(express.static(path.join(__dirname, '..', 'frontend')));
 app.use('/api/students',     studentsRouter);
 app.use('/api/registration', registrationRouter);
 app.use('/api/attendance',   attendanceRouter);
+app.use('/api/courses',      coursesRouter);
 app.use('/api/auth',         authRouter);
 
 // Health check

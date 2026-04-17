@@ -161,12 +161,13 @@
         // Get registered students
         const regR = await fetch(`${API}/registration/sections/${secId}`);
         const regD = await regR.json();
+        const registeredStudents = regD.success && regD.data ? regD.data.filter(s => String(s.REGSTATUS).trim().toUpperCase() === 'REGISTERED') : [];
 
         // Get existing attendance for this date+slot
         const attR = await fetch(`${API}/attendance/section/${secId}?date=${date}&slot=${slot}`);
         const attD = await attR.json();
 
-        if (!regD.success || !regD.data.length) {
+        if (!registeredStudents.length) {
           el.innerHTML = '<div class="empty-state"><div class="empty-icon">📭</div><p>No students registered in this section</p></div>';
           return;
         }
@@ -176,7 +177,7 @@
           attD.data.forEach(a => { attendanceMap[a.STUDENTID] = a.ATTSTATUS; });
         }
 
-        renderAttendanceSheet(regD.data);
+        renderAttendanceSheet(registeredStudents);
       } catch (e) {
         el.innerHTML = '<div class="empty-state"><p>Error loading attendance sheet</p></div>';
       }

@@ -48,9 +48,26 @@ router.get('/:id', async (req, res) => {
 // GET /api/students/:id/courses/:sessionId — calls pipelined function
 router.get('/:id/courses/:sessionId', async (req, res) => {
   try {
+    let studentId = req.params.id;
+    if (isNaN(studentId)) {
+      const studentRes = await db.execute(
+        `SELECT StudentID FROM STUDENTS WHERE RollNumber = :roll`,
+        { roll: studentId }
+      );
+      if (!studentRes.rows.length) {
+        return res.status(404).json({ success: false, message: 'Student not found' });
+      }
+      studentId = studentRes.rows[0].STUDENTID;
+    }
+
+    const sessionId = Number(req.params.sessionId);
+    if (Number.isNaN(sessionId)) {
+      return res.status(400).json({ success: false, message: 'Invalid session ID' });
+    }
+
     const result = await db.execute(
       `SELECT * FROM TABLE(FN_GET_COURSE_INSTANCES(:sid, :sess))`,
-      { sid: req.params.id, sess: req.params.sessionId }
+      { sid: studentId, sess: sessionId }
     );
     res.json({ success: true, data: result.rows });
   } catch (err) {

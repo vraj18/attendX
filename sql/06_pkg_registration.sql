@@ -221,46 +221,98 @@ CREATE OR REPLACE PACKAGE BODY PKG_REGISTRATION AS
     -- PUBLIC: Register student in a section
     -- --------------------------------------------------------
     PROCEDURE SP_REGISTER_STUDENT (
-        p_StudentID   IN  NUMBER,
-        p_SectionID   IN  NUMBER,
-        p_PerformedBy IN  VARCHAR2,
-        p_RegID       OUT NUMBER,
-        p_Message     OUT VARCHAR2
-    ) AS
-        v_validation VARCHAR2(500);
-        v_reg_id     NUMBER;
-        v_init_status VARCHAR2(15) := 'Pending';
+    p_StudentID   IN  NUMBER,
+    p_SectionID   IN  NUMBER,
+    p_PerformedBy IN  VARCHAR2,
+    p_RegID       OUT NUMBER,
+    p_Message     OUT VARCHAR2
+) AS
+    v_validation   VARCHAR2(500);
+    v_reg_id       NUMBER;
+    v_existing_id  NUMBER;
+    v_existing_status VARCHAR2(20);
+    v_init_status  VARCHAR2(15) := 'Pending';
+BEGIN
+    -- 1. Check if record already exists
     BEGIN
-        -- Run validation
-        v_validation := FN_VALIDATE_REGISTRATION(p_StudentID, p_SectionID);
+        -- SELECT RegistrationID, RegStatus
+        -- INTO   v_existing_id, v_existing_status
+        -- FROM   STUDENT_REGISTRATIONS
+        -- WHERE  StudentID = p_StudentID
+        --   AND  SectionID = p_SectionID;
+        SELECT RegistrationID, RegStatus
+        INTO   v_existing_id, v_existing_status
+        FROM (
+            SELECT RegistrationID, RegStatus
+            FROM STUDENT_REGISTRATIONS
+            WHERE StudentID = p_StudentID
+            AND SectionID = p_SectionID
+            ORDER BY RegistrationDate DESC
+        )
+        WHERE ROWNUM = 1;
 
-        IF v_validation != 'OK' THEN
+        -- Record exists
+        IF v_existing_status = 'Dropped' THEN
+
+            -- ✅ VALIDATE AGAIN
+            v_validation := FN_VALIDATE_REGISTRATION(p_StudentID, p_SectionID);
+
+            IF v_validation != 'OK' THEN
+                p_RegID   := -1;
+                p_Message := v_validation;
+                RETURN;
+            END IF;
+            -- 🔥 RE-REGISTER (UPDATE instead of INSERT)
+
+            UPDATE STUDENT_REGISTRATIONS
+            SET RegStatus = v_init_status,
+                RegistrationDate = SYSDATE
+            WHERE RegistrationID = v_existing_id;
+
+            COMMIT;
+            p_RegID   := v_existing_id;
+            p_Message := 'SUCCESS: Student re-registered.';
+            RETURN;
+
+        ELSE
+            -- Already active/pending
             p_RegID   := -1;
-            p_Message := v_validation;
+            p_Message := 'ERROR: Student already registered in this section.';
             RETURN;
         END IF;
 
-        -- Insert registration
-        v_reg_id := SEQ_REGISTRATIONS.NEXTVAL;
-        
-        -- Admin and Student both start as Pending now. 
-        -- (User specified only Faculty can approve)
-        
-        INSERT INTO STUDENT_REGISTRATIONS (
-            RegistrationID, StudentID, SectionID, RegistrationDate, RegStatus
-        ) VALUES (
-            v_reg_id, p_StudentID, p_SectionID, SYSDATE, v_init_status
-        );
+    EXCEPTION
+        WHEN NO_DATA_FOUND THEN
+            NULL; -- No existing record → proceed normally
+    END;
 
-        COMMIT;
-        p_RegID   := v_reg_id;
-        p_Message := 'SUCCESS: Student registered. RegistrationID=' || v_reg_id;
+    -- 2. Run validation ONLY for fresh insert
+    v_validation := FN_VALIDATE_REGISTRATION(p_StudentID, p_SectionID);
 
-    EXCEPTION WHEN OTHERS THEN
-        ROLLBACK;
+    IF v_validation != 'OK' THEN
         p_RegID   := -1;
-        p_Message := 'EXCEPTION: ' || SQLERRM;
-    END SP_REGISTER_STUDENT;
+        p_Message := v_validation;
+        RETURN;
+    END IF;
+
+    -- 3. Fresh INSERT
+    v_reg_id := SEQ_REGISTRATIONS.NEXTVAL;
+
+    INSERT INTO STUDENT_REGISTRATIONS (
+        RegistrationID, StudentID, SectionID, RegistrationDate, RegStatus
+    ) VALUES (
+        v_reg_id, p_StudentID, p_SectionID, SYSDATE, v_init_status
+    );
+
+    COMMIT;
+    p_RegID   := v_reg_id;
+    p_Message := 'SUCCESS: Student registered. RegistrationID=' || v_reg_id;
+
+EXCEPTION WHEN OTHERS THEN
+    ROLLBACK;
+    p_RegID   := -1;
+    p_Message := 'EXCEPTION: ' || SQLERRM;
+END SP_REGISTER_STUDENT;
 
 
     -- --------------------------------------------------------
@@ -287,10 +339,15 @@ CREATE OR REPLACE PACKAGE BODY PKG_REGISTRATION AS
             RETURN;
         END IF;
 
+        -- UPDATE STUDENT_REGISTRATIONS
+        -- SET    RegStatus = 'Dropped'
+        -- WHERE  StudentID = p_StudentID
+        --   AND  SectionID = p_SectionID;
         UPDATE STUDENT_REGISTRATIONS
-        SET    RegStatus = 'Dropped'
-        WHERE  StudentID = p_StudentID
-          AND  SectionID = p_SectionID;
+        SET RegStatus = 'Dropped'
+        WHERE StudentID = p_StudentID
+        AND SectionID = p_SectionID
+        AND RegStatus IN ('Registered', 'Pending');
 
         COMMIT;
         p_Message := 'SUCCESS: Student dropped from section.';
