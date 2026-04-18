@@ -143,8 +143,19 @@ router.post('/register', async (req, res) => {
 
 // POST /api/registration/drop-section
 router.post('/drop-section', async (req, res) => {
-  const { studentId, sectionId, reason, performedBy } = req.body;
+  let { studentId, sectionId, reason, performedBy } = req.body;
   try {
+    if (isNaN(studentId)) {
+      const studentRes = await db.execute(
+        `SELECT StudentID FROM STUDENTS WHERE RollNumber = :roll`,
+        { roll: studentId }
+      );
+      if (studentRes.rows.length === 0) {
+        return res.status(404).json({ success: false, message: 'Roll Number not found' });
+      }
+      studentId = studentRes.rows[0].STUDENTID;
+    }
+
     const result = await db.execute(
       `BEGIN PKG_REGISTRATION.SP_DROP_FROM_SECTION(:sid, :secid, :reason, :by, :msg); END;`,
       {

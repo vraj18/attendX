@@ -18,10 +18,16 @@ function parseSqlFile(content) {
     if (isPlSql) {
       stmts.push(raw);
     } else {
-      const parts = raw.split(';');
+      // Remove all single-line comments from the chunk to avoid splitting on semicolons inside comments
+      const cleanChunk = raw.replace(/^--.*$/gm, '');
+      const parts = cleanChunk.split(';');
+      
       for (let p of parts) {
-        const s = p.trim();
-        if (s && !s.startsWith('--') && !s.toUpperCase().startsWith('PROMPT') && !s.toUpperCase().startsWith('SET ')) {
+        let s = p.trim();
+        if (!s) continue;
+        
+        const upper = s.toUpperCase();
+        if (!upper.startsWith('PROMPT') && !upper.startsWith('SET ')) {
           stmts.push(s);
         }
       }
@@ -43,12 +49,12 @@ async function main() {
       const stmts = parseSqlFile(fs.readFileSync(p, 'utf8'));
       for (const s of stmts) {
         try {
-          await db.execute(s);
+          await db.execute(s, [], { autoCommit: true });
         } catch (err) {
-          const ignorable = ['ORA-00942','ORA-00955','ORA-01430','ORA-02260','ORA-02261','ORA-02275','ORA-01432','ORA-04043','ORA-01432','ORA-00001','ORA-02291'];
+          const ignorable = ['ORA-00942','ORA-00955','ORA-01430','ORA-02260','ORA-02261','ORA-02275','ORA-01432','ORA-04043','ORA-00001','ORA-02291'];
           if (!ignorable.some(code => err.message.includes(code))) {
-             console.error(`  ❌ Error: ${err.message.substring(0, 100)}`);
-             // console.error(`  SQL: ${s.substring(0, 50)}...`);
+             console.error(`  ❌ Error in statement: ${s.substring(0, 100)}...`);
+             console.error(`     Message: ${err.message}`);
           }
         }
       }
