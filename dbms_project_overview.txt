@@ -1,0 +1,92 @@
+=============================================================
+             DBMS PROJECT OVERVIEW & ANALYSIS
+         Student Attendance & Registration System
+=============================================================
+
+This document provides a comprehensive analysis of the database
+management system (DBMS) architecture behind the Student 
+Attendance & Registration System.
+
+-------------------------------------------------------------
+1. TABLES AND CONNECTIONS
+-------------------------------------------------------------
+The database consists of 10 primary entities, connected logically:
+
+1. SESSIONS
+   - Core entity defining academic terms (e.g., Even Semester 2024-25).
+2. FACULTY
+   - Stores professors. Connected to SECTIONS (one faculty coordinates multiple sections).
+3. ADMINS
+   - Standalone authentication table storing system administrators.
+4. COURSES
+   - Defines the syllabus/curriculum details (Credits, Department, Level).
+5. COURSE_INSTANCES
+   - A bridge table (Many-to-Many resolver) linking COURSES and SESSIONS. 
+   - A course offered in a specific session forms an "Instance".
+6. SECTIONS
+   - Belongs to a single COURSE_INSTANCE. 
+   - Has a foreign key linking to FACULTY (who teaches the section).
+7. BATCHES
+   - Groups students for particular courses/sessions, monitored by a Faculty coordinator.
+8. STUDENTS
+   - Core entity storing student profiles (Roll Number, Branch, Status).
+9. STUDENT_REGISTRATIONS
+   - Bridge resolving Many-to-Many between STUDENTS and SECTIONS.
+   - Tracks enrollment status ("Pending", "Registered", "Dropped").
+10. ATTENDANCE
+    - Associates a STUDENT with a SECTION on a specific Date/Slot.
+    - Foreign key links to the FACULTY who marked the attendance.
+11. ADMISSION_DROP_LOG
+    - Audit table connected to STUDENTS tracking system lifecycle events.
+
+-------------------------------------------------------------
+2. DBMS CONCEPTS APPLIED
+-------------------------------------------------------------
+A. Normalization (1NF, 2NF, 3NF)
+   - 1NF (First Normal Form): All tables hold atomic values. There are no repeating groups or arrays stored in any column. For instance, a student taking multiple courses isn't stored as a comma-separated string; instead, it is properly broken out into the `STUDENT_REGISTRATIONS` table.
+   - 2NF (Second Normal Form): Fully achieved. Every non-prime attribute is fully functionally dependent on the primary key. In bridge tables like `COURSE_INSTANCES`, attributes like `MaxCapacity` depend on the composite of Course-Session, matching the ID.
+   - 3NF (Third Normal Form): Followed tightly. There are no transitive dependencies. For example, student's branch and admission date depend only on the StudentID. If a course's name changes, you only update it in the `COURSES` table rather than updating 50 instances in the registration table.
+
+B. Table Constraints (Integrity)
+   - PRIMARY KEYS (PK): Every table uses a numeric surrogate key (e.g., `StudentID`, `CourseID`) mapped to Oracle Sequences for auto-increment uniqueness.
+   - UNIQUE KEYS (UK): Logical constraints prevent data duplication. E.g., `UNIQUE(StudentID, SectionID)` in registrations ensures a student can't dual-enroll in the same section. Email and Roll Numbers are uniformly constrained as UNIQUE.
+   - FOREIGN KEYS (FK): Enforce referential integrity. Deleting a Student drops their logs via relationships.
+   - CHECK CONSTRAINTS: Widely used to enforce domain integrity:
+     -> CHK_SESSION_DATES: EndDate > StartDate
+     -> CHK_ATT_STATUS: Status must be ('Present', 'Absent', 'Late')
+     -> CHK_COURSE_YEAR: RecommendedYear BETWEEN 1 AND 4
+
+C. Advanced Oracle DBMS Features
+   - PL/SQL Packages: Core business logic (Registration validation, dropping, attendance calculation) is stored directly inside the database via `PKG_REGISTRATION` and `PKG_ATTENDANCE`. This ensures ACID compliance and minimizes backend network calls.
+   - Upserts (MERGE Statements): Used in `SP_MARK_ATTENDANCE` to elegantly either insert a new attendance record or update an existing one atomically.
+   - Pipelined Table Functions: `FN_GET_COURSE_INSTANCES` is used for dynamic row generation to return structured data directly to the frontend.
+
+-------------------------------------------------------------
+3. DATA FLOWS (WHAT CHANGES DO WHAT)
+-------------------------------------------------------------
+- Registering a Student: Inserts a record into `STUDENT_REGISTRATIONS`. The PL/SQL logic validates if the student passes branch, year, and backlog checks. If they drop and re-register, the DB does an UPDATE operation switching status from "Dropped" to "Registered", preserving historical constraints.
+- Dropping a Course: Updates `RegStatus` to 'Dropped' in `STUDENT_REGISTRATIONS`. This implicitly hides the student from the Faculty's active attendance lists but preserves the record for academic history.
+- Marking Bulk Attendance: The DB scans `STUDENT_REGISTRATIONS` for 'Registered' status only. It generates default ('Absent') records in the `ATTENDANCE` table, which the faculty can then pivot to 'Present'.
+
+-------------------------------------------------------------
+4. USER PERMISSIONS AND SYSTEM IMPACT
+-------------------------------------------------------------
+
+ROLE 1: STUDENT
+- Capabilities: Can view their dashboard, attendance percentages, academic history, and register for courses.
+- Database Impact:
+  - When they register, it writes to `STUDENT_REGISTRATIONS`.
+  - The Registration triggers DB-level PL/SQL validations comparing the course requirements (`COURSES`) against their profile (`STUDENTS`).
+
+ROLE 2: FACULTY
+- Capabilities: Can view their assigned sections, monitor students enrolled under them, and mark attendance.
+- Database Impact:
+  - Faculty actions map directly to the `ATTENDANCE` table. 
+  - They execute `SP_MARK_ATTENDANCE` or `SP_BULK_MARK`. Actions are tagged with their `FacultyID` under the `MarkedBy` column for auditing.
+
+ROLE 3: ADMINISTRATOR (ADMIN)
+- Capabilities: Omnipotent control. Can admit/drop students globally, create/edit courses, manage master class sections, and register/drop students from specific courses forcefully.
+- Database Impact:
+  - Creating a course inserts into three cascaded tables: `COURSES` -> `COURSE_INSTANCES` -> `SECTIONS`.
+  - Dropping a student updates the `STUDENTS` table status to "Dropped" and inserts a strict log into `ADMISSION_DROP_LOG`.
+  - Edits to a Course update `COURSES`, whereas edits to room/faculties update `SECTIONS`. All downstream faculty/student tables immediately reflect these changes via Foreign Key joins.

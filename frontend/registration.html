@@ -214,6 +214,7 @@
             <button class="btn btn-ghost btn-sm" onclick="resetCourseForm()">New Course</button>
           </div>
           <input type="hidden" id="course_editId" />
+          <input type="hidden" id="course_sectionId" />
           <div class="form-row">
             <div class="form-group">
               <label class="form-label">Course Code</label>
@@ -232,6 +233,7 @@
                 <option value="ECE">ECE</option>
                 <option value="EEE">EEE</option>
                 <option value="MEC">MEC</option>
+                <option value="GEN">GEN (General)</option>
               </select>
             </div>
             <div class="form-group">
@@ -576,6 +578,7 @@
 
     function resetCourseForm() {
       document.getElementById('course_editId').value = '';
+      document.getElementById('course_sectionId').value = '';
       document.getElementById('course_code').value = '';
       document.getElementById('course_name').value = '';
       document.getElementById('course_department').value = 'CSE';
@@ -603,6 +606,7 @@
         }
         const course = d.data;
         document.getElementById('course_editId').value = course.COURSEID;
+        document.getElementById('course_sectionId').value = course.SECTIONID || '';
         document.getElementById('course_code').value = course.COURSECODE || '';
         document.getElementById('course_name').value = course.COURSENAME || '';
         document.getElementById('course_department').value = course.DEPARTMENT || 'CSE';
@@ -636,6 +640,7 @@
         courseLevel: document.getElementById('course_level').value,
         credits: document.getElementById('course_credits').value,
         sessionId: document.getElementById('course_session').value,
+        sectionId: document.getElementById('course_sectionId').value,
         sectionName: document.getElementById('course_sectionName').value,
         facultyName: document.getElementById('course_facultyName').value,
         room: document.getElementById('course_room').value,
@@ -644,10 +649,12 @@
         maxStudents: document.getElementById('course_maxStudents').value
       };
 
-      if (!payload.courseCode || !payload.courseName || !payload.department || !payload.courseCategory || !payload.sessionId || !payload.facultyName) {
-        showToast('Fill in code, name, branch, type, session and professor', 'info');
-        return;
-      }
+      if (!payload.courseCode) return showToast('Fill in Course Code', 'info');
+      if (!payload.courseName) return showToast('Fill in Course Name', 'info');
+      if (!payload.department) return showToast('Choose Department/Branch', 'info');
+      if (!payload.courseCategory) return showToast('Choose Course Type', 'info');
+      if (!payload.sessionId) return showToast('Choose Session', 'info');
+      if (!payload.facultyName) return showToast('Enter Professor Name', 'info');
 
       const editId = document.getElementById('course_editId').value;
       const method = editId ? 'PUT' : 'POST';

@@ -233,13 +233,8 @@ CREATE OR REPLACE PACKAGE BODY PKG_REGISTRATION AS
     v_existing_status VARCHAR2(20);
     v_init_status  VARCHAR2(15) := 'Pending';
 BEGIN
-    -- 1. Check if record already exists
+    -- 1. Check if ANY record already exists for this (Student, Section)
     BEGIN
-        -- SELECT RegistrationID, RegStatus
-        -- INTO   v_existing_id, v_existing_status
-        -- FROM   STUDENT_REGISTRATIONS
-        -- WHERE  StudentID = p_StudentID
-        --   AND  SectionID = p_SectionID;
         SELECT RegistrationID, RegStatus
         INTO   v_existing_id, v_existing_status
         FROM (
@@ -251,39 +246,49 @@ BEGIN
         )
         WHERE ROWNUM = 1;
 
-        -- Record exists
-        IF v_existing_status = 'Dropped' THEN
+        -- If record exists, determine if we can "reactivate" it
+        -- We allow re-registration if current status is NOT 'Registered' or 'Pending'
+        IF UPPER(TRIM(v_existing_status)) NOT IN ('REGISTERED', 'PENDING') THEN
 
-            -- ✅ VALIDATE AGAIN
+            -- ✅ VALIDATE AGAIN (Eligibilty checks)
             v_validation := FN_VALIDATE_REGISTRATION(p_StudentID, p_SectionID);
 
-            IF v_validation != 'OK' THEN
+            -- Special case: FN_VALIDATE_REGISTRATION might return 'ERROR: Student already registered'
+            -- because it checks records != 'Dropped'. We ignore that specific error here
+            -- if we are about to update a 'Dropped/Rejected/Waitlisted' record.
+            IF v_validation != 'OK' AND v_validation NOT LIKE '%already registered%' THEN
                 p_RegID   := -1;
                 p_Message := v_validation;
                 RETURN;
             END IF;
-            -- 🔥 RE-REGISTER (UPDATE instead of INSERT)
 
+            -- 🔥 RE-REGISTER (UPDATE instead of INSERT to satisfy Unique Constraint)
             UPDATE STUDENT_REGISTRATIONS
             SET RegStatus = v_init_status,
-                RegistrationDate = SYSDATE
+                RegistrationDate = SYSDATE,
+                Grade = NULL -- Reset grade on re-registration
             WHERE RegistrationID = v_existing_id;
 
             COMMIT;
             p_RegID   := v_existing_id;
-            p_Message := 'SUCCESS: Student re-registered.';
+            p_Message := 'SUCCESS: Student re-registered (updated existing record).';
             RETURN;
 
         ELSE
-            -- Already active/pending
+            -- Already active (Registered or Pending)
             p_RegID   := -1;
-            p_Message := 'ERROR: Student already registered in this section.';
+            p_Message := 'ERROR: Student is already active/pending in this section (Status: ' || v_existing_status || ').';
             RETURN;
         END IF;
 
     EXCEPTION
         WHEN NO_DATA_FOUND THEN
-            NULL; -- No existing record → proceed normally
+            NULL; -- No existing record → proceed to Step 3 (INSERT)
+        WHEN OTHERS THEN
+            ROLLBACK;
+            p_RegID   := -1;
+            p_Message := 'EXCEPTION during existing check: ' || SQLERRM;
+            RETURN;
     END;
 
     -- 2. Run validation ONLY for fresh insert
@@ -296,23 +301,36 @@ BEGIN
     END IF;
 
     -- 3. Fresh INSERT
-    v_reg_id := SEQ_REGISTRATIONS.NEXTVAL;
+    BEGIN
+        v_reg_id := SEQ_REGISTRATIONS.NEXTVAL;
 
-    INSERT INTO STUDENT_REGISTRATIONS (
-        RegistrationID, StudentID, SectionID, RegistrationDate, RegStatus
-    ) VALUES (
-        v_reg_id, p_StudentID, p_SectionID, SYSDATE, v_init_status
-    );
+        INSERT INTO STUDENT_REGISTRATIONS (
+            RegistrationID, StudentID, SectionID, RegistrationDate, RegStatus
+        ) VALUES (
+            v_reg_id, p_StudentID, p_SectionID, SYSDATE, v_init_status
+        );
 
-    COMMIT;
-    p_RegID   := v_reg_id;
-    p_Message := 'SUCCESS: Student registered. RegistrationID=' || v_reg_id;
+        COMMIT;
+        p_RegID   := v_reg_id;
+        p_Message := 'SUCCESS: Student registered. RegistrationID=' || v_reg_id;
+    
+    EXCEPTION 
+        WHEN DUP_VAL_ON_INDEX THEN
+            ROLLBACK;
+            p_RegID   := -1;
+            p_Message := 'ERROR: Unique constraint violation on insert. Please try again.';
+        WHEN OTHERS THEN
+            ROLLBACK;
+            p_RegID   := -1;
+            p_Message := 'EXCEPTION during insert: ' || SQLERRM;
+    END;
 
 EXCEPTION WHEN OTHERS THEN
     ROLLBACK;
     p_RegID   := -1;
-    p_Message := 'EXCEPTION: ' || SQLERRM;
+    p_Message := 'GLOBAL EXCEPTION: ' || SQLERRM;
 END SP_REGISTER_STUDENT;
+
 
 
     -- --------------------------------------------------------
