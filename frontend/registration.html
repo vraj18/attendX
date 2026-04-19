@@ -24,7 +24,7 @@
       <a href="registration.html" class="nav-link active">Registration</a>
       <a href="attendance.html" class="nav-link" id="nav-attendance"> Attendance</a>
       <a href="profile.html" class="nav-link" id="nav-profile">Student Profile</a>
-      <span class="nav-section-label admin-only">Reports</span>
+      <span class="nav-section-label staff-only">Reports</span>
       <a href="report.html" class="nav-link admin-only">Attendance Report</a>
     </nav>
     <div class="sidebar-footer">Oracle 21c &nbsp;•&nbsp; PL/SQL Powered</div>
@@ -50,7 +50,7 @@
         style="flex:1;justify-content:center">Drop Student</button>
       <button class="btn btn-ghost admin-only" id="tabCourses" onclick="showTab('courses')"
         style="flex:1;justify-content:center">Course Catalog</button>
-      <button class="btn btn-ghost" id="tabSections" onclick="showTab('sections')"
+      <button class="btn btn-ghost admin-only" id="tabSections" onclick="showTab('sections')"
         style="flex:1;justify-content:center">All Sections</button>
     </div>
 
@@ -63,7 +63,7 @@
           <div class="form-group">
             <label class="form-label">Roll Number</label>
             <div style="display:flex;gap:.5rem">
-              <input type="text" id="reg_studentId" class="form-control" placeholder="e.g. bt23cse101" />
+              <input type="text" id="reg_studentId" class="form-control" placeholder="e.g. bt23cse001" />
               <button class="btn btn-ghost" id="btnStudentLookup" onclick="lookupStudent()">[Search]</button>
             </div>
             <div id="studentInfo" style="margin-top:.5rem;font-size:.8rem;color:var(--text-muted)"></div>
@@ -174,7 +174,7 @@
           <div class="card-title">Drop from Section</div>
           <div class="form-group">
             <label class="form-label">Student Roll Number</label>
-            <input type="text" id="drop_studentId" class="form-control" placeholder="e.g. bt23cse101" />
+            <input type="text" id="drop_studentId" class="form-control" placeholder="e.g. bt23cse001" />
           </div>
           <div class="form-group">
             <label class="form-label">Section ID</label>
@@ -194,7 +194,7 @@
           </p>
           <div class="form-group">
             <label class="form-label">Student Roll Number</label>
-            <input type="text" id="dropAll_studentId" class="form-control" placeholder="e.g. bt23cse101" />
+            <input type="text" id="dropAll_studentId" class="form-control" placeholder="e.g. bt23cse001" />
           </div>
           <div class="form-group">
             <label class="form-label">Reason</label>
@@ -339,7 +339,7 @@
     </div>
 
     <!-- ── Tab: Sections ──────────────────────────────────── -->
-    <div id="tab-sections" style="display:none">
+    <div id="tab-sections" style="display:none" class="admin-only">
       <div class="card">
         <div class="flex-between mb-2">
           <div class="card-title" style="margin-bottom:0"> All Course Sections</div>
@@ -366,7 +366,7 @@
     let allCourseCatalog = [];
 
     // Initialize roles UI
-    if (currentUser.Role === 'student') {
+    if (currentUser.Role === 'student') { document.querySelectorAll('.staff-only').forEach(el => el.style.display = 'none');
       document.querySelectorAll('.admin-only').forEach(el => el.style.display = 'none');
       document.querySelectorAll('.faculty-admin').forEach(el => el.style.display = 'none');
       const stuInput = document.getElementById('reg_studentId');

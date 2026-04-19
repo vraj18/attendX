@@ -27,7 +27,7 @@ BEGIN
     SET ProgramLevel = 'PG'
     WHERE ProgramLevel = 'UG'
       AND Status       = 'Active'
-      AND MONTHS_BETWEEN(:NEW.StartDate, AdmissionDate) >= 36;
+      AND MONTHS_BETWEEN(:NEW.StartDate, AdmissionDate) >= 48;
 
     -- Log to server output for debugging
     DBMS_OUTPUT.PUT_LINE(

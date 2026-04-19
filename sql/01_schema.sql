@@ -11,7 +11,7 @@ BEGIN
     WHERE table_name IN (
       'ADMISSION_DROP_LOG','ATTENDANCE','STUDENT_REGISTRATIONS',
       'BATCHES','SECTIONS','COURSE_INSTANCES','FACULTY',
-      'STUDENTS','COURSES','SESSIONS','ADMINS'
+      'STUDENTS','COURSE_PREREQUISITES','COURSES','SESSIONS','ADMINS'
     )
   ) LOOP
     EXECUTE IMMEDIATE 'DROP TABLE ' || t.table_name || ' CASCADE CONSTRAINTS';
@@ -84,6 +84,20 @@ CREATE TABLE COURSES (
         CONSTRAINT CHK_COURSE_CAT CHECK (CourseCategory IN ('DC','DE','OC','HM')),
     RecommendedYear NUMBER(1)       NOT NULL
         CONSTRAINT CHK_COURSE_YEAR CHECK (RecommendedYear BETWEEN 1 AND 4)
+)
+STORAGE (INITIAL 64K NEXT 64K);
+/
+
+-- =============================================================
+-- 3b. COURSE_PREREQUISITES
+-- =============================================================
+CREATE TABLE COURSE_PREREQUISITES (
+    CourseID        NUMBER(10)  NOT NULL,
+    PrereqCourseID  NUMBER(10)  NOT NULL,
+    CONSTRAINT PK_COURSE_PREREQS PRIMARY KEY (CourseID, PrereqCourseID),
+    CONSTRAINT FK_CP_COURSE      FOREIGN KEY (CourseID)       REFERENCES COURSES(CourseID),
+    CONSTRAINT FK_CP_PREREQ      FOREIGN KEY (PrereqCourseID) REFERENCES COURSES(CourseID),
+    CONSTRAINT CHK_CP_NOT_SELF   CHECK (CourseID != PrereqCourseID)
 )
 STORAGE (INITIAL 64K NEXT 64K);
 

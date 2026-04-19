@@ -88,6 +88,8 @@ CREATE OR REPLACE PACKAGE BODY PKG_REGISTRATION AS
         v_passed_count     NUMBER;
         v_backlog_count    NUMBER;
         v_instance_id      COURSE_INSTANCES.InstanceID%TYPE;
+        v_unmet_prereq_count NUMBER;
+        v_missing_prereq   VARCHAR2(250);
     BEGIN
         -- 1. Student must exist and be Active
         BEGIN
@@ -141,6 +143,26 @@ CREATE OR REPLACE PACKAGE BODY PKG_REGISTRATION AS
         IF v_course_year > v_student_year THEN
             RETURN 'ERROR: Senior year courses (' || v_course_year || ') are not available for you.';
         END IF;
+        
+        -- 2d. Prerequisite Check
+        SELECT COUNT(*), MIN(c.CourseCode || ' (' || c.CourseName || ')')
+        INTO   v_unmet_prereq_count, v_missing_prereq
+        FROM   COURSE_PREREQUISITES cp
+        JOIN   COURSES c ON cp.PrereqCourseID = c.CourseID
+        WHERE  cp.CourseID = v_course_id
+          AND  NOT EXISTS (
+              SELECT 1 FROM STUDENT_REGISTRATIONS sr
+              JOIN SECTIONS sec ON sr.SectionID = sec.SectionID
+              JOIN COURSE_INSTANCES ci ON sec.InstanceID = ci.InstanceID
+              WHERE sr.StudentID = p_StudentID
+                AND ci.CourseID = cp.PrereqCourseID
+                AND sr.RegStatus = 'Registered'
+                AND sr.Grade IN ('AA','AB','BB','BC','CC','CD','DD')
+          );
+
+        IF v_unmet_prereq_count > 0 THEN
+            RETURN 'ERROR: Prerequisite not met. You must pass ' || v_missing_prereq || ' first.';
+        END IF;
 
         SELECT COUNT(*) INTO v_passed_count
         FROM   STUDENT_REGISTRATIONS sr
@@ -164,8 +186,16 @@ CREATE OR REPLACE PACKAGE BODY PKG_REGISTRATION AS
           AND  sr.RegStatus != 'Dropped'
           AND  sr.Grade IN ('W','FF','LL');
 
-        IF v_backlog_count > 0 AND v_course_parity != 'Both' AND v_session_parity != v_course_parity THEN
-            RETURN 'ERROR: Backlog retake for this course is allowed only in ' || v_course_parity || ' semesters.';
+        IF v_backlog_count > 0 THEN
+            -- Strict Semester Parity for Backlogs
+            IF v_course_parity != 'Both' AND v_session_parity != v_course_parity THEN
+                RETURN 'ERROR: Backlog retake for this course is allowed only in ' || v_course_parity || ' semesters.';
+            END IF;
+            
+            -- Branch Check (Already covered generally, but reinforcing for clarity)
+            IF v_course_cat IN ('DC','DE') AND v_course_branch != v_student_branch THEN
+                RETURN 'ERROR: Retake restricted to students of branch ' || v_course_branch;
+            END IF;
         END IF;
 
         -- 3. Session must be active
@@ -399,9 +429,9 @@ END SP_REGISTER_STUDENT;
         v_roll   VARCHAR2(20);
     BEGIN
         -- Generate Roll Number: bt + batch_year_suffix + branch + next_id
-        -- e.g. bt23cse101
+        -- e.g. bt23cse001
         SELECT SEQ_STUDENTS.NEXTVAL INTO v_sid FROM DUAL;
-        v_roll := 'bt' || SUBSTR(TO_CHAR(p_BatchYear), 3, 2) || LOWER(p_Branch) || TO_CHAR(v_sid);
+        v_roll := 'bt' || SUBSTR(TO_CHAR(p_BatchYear), 3, 2) || LOWER(p_Branch) || LPAD(TO_CHAR(v_sid), 3, '0');
 
         -- Check duplicate email
         SELECT COUNT(*) INTO v_dup FROM STUDENTS WHERE Email = p_Email;

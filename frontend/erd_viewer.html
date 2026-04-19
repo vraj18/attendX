@@ -1,0 +1,178 @@
+<!DOCTYPE html>
+<html lang="en">
+<head>
+    <meta charset="UTF-8">
+    <meta name="viewport" content="width=device-width, initial-scale=1.0">
+    <title>attendX ER Diagram Viewer</title>
+    <script type="module">
+        import mermaid from 'https://cdn.jsdelivr.net/npm/mermaid@10/dist/mermaid.esm.min.mjs';
+        mermaid.initialize({ 
+            startOnLoad: true,
+            theme: 'base',
+            themeVariables: {
+                primaryColor: '#e1f5fe',
+                primaryTextColor: '#01579b',
+                primaryBorderColor: '#01579b',
+                lineColor: '#01579b',
+                secondaryColor: '#f1f8e9',
+                tertiaryColor: '#fffde7'
+            }
+        });
+    </script>
+    <style>
+        body {
+            font-family: 'Segoe UI', Tahoma, Geneva, Verdana, sans-serif;
+            background-color: #f8f9fa;
+            margin: 0;
+            padding: 20px;
+            display: flex;
+            flex-direction: column;
+            align-items: center;
+        }
+        h1 { color: #2c3e50; margin-bottom: 30px; }
+        .mermaid {
+            background: white;
+            padding: 40px;
+            border-radius: 12px;
+            box-shadow: 0 10px 30px rgba(0,0,0,0.1);
+            width: 90%;
+            max-width: 1200px;
+        }
+    </style>
+</head>
+<body>
+    <h1>attendX Entity Relationship Diagram</h1>
+    <div class="mermaid">
+erDiagram
+    STUDENTS {
+        NUMBER StudentID PK
+        VARCHAR2 RollNumber UK
+        VARCHAR2 Name
+        VARCHAR2 Email UK
+        VARCHAR2 Branch
+        NUMBER BatchYear
+        NUMBER CurrentYear
+        VARCHAR2 ProgramLevel
+        VARCHAR2 Status
+    }
+
+    FACULTY {
+        NUMBER FacultyID PK
+        VARCHAR2 Name
+        VARCHAR2 Email UK
+        VARCHAR2 Department
+        VARCHAR2 Designation
+    }
+
+    ADMINS {
+        VARCHAR2 Name
+        VARCHAR2 Email PK
+        VARCHAR2 Password
+    }
+
+    SESSIONS {
+        NUMBER SessionID PK
+        VARCHAR2 SessionName
+        VARCHAR2 AcademicYear
+        DATE StartDate
+        DATE EndDate
+        CHAR IsActive
+    }
+
+    COURSES {
+        NUMBER CourseID PK
+        VARCHAR2 CourseCode UK
+        VARCHAR2 CourseName
+        NUMBER Credits
+        VARCHAR2 Department
+        VARCHAR2 CourseLevel
+        VARCHAR2 SemesterType
+        VARCHAR2 CourseCategory
+        NUMBER RecommendedYear
+    }
+    
+    COURSE_PREREQUISITES {
+        NUMBER CourseID FK
+        NUMBER PrereqCourseID FK
+    }
+
+    COURSE_INSTANCES {
+        NUMBER InstanceID PK
+        NUMBER CourseID FK
+        NUMBER SessionID FK
+        NUMBER MaxCapacity
+    }
+
+    SECTIONS {
+        NUMBER SectionID PK
+        NUMBER InstanceID FK
+        VARCHAR2 SectionName UK
+        NUMBER FacultyID FK
+        VARCHAR2 Room
+        VARCHAR2 Slot1
+        VARCHAR2 Slot2
+        NUMBER EnrolledCount
+        NUMBER MaxStudents
+    }
+
+    BATCHES {
+        NUMBER BatchID PK
+        VARCHAR2 BatchName
+        NUMBER CourseID FK
+        NUMBER SessionID FK
+        NUMBER CoordinatorID FK
+    }
+
+    STUDENT_REGISTRATIONS {
+        NUMBER RegistrationID PK
+        NUMBER StudentID FK
+        NUMBER SectionID FK
+        DATE RegistrationDate
+        VARCHAR2 RegStatus
+        VARCHAR2 Grade
+    }
+
+    ATTENDANCE {
+        NUMBER AttendanceID PK
+        NUMBER StudentID FK
+        NUMBER SectionID FK
+        DATE AttendanceDate
+        NUMBER SlotNumber
+        VARCHAR2 AttStatus
+        NUMBER MarkedBy FK
+        TIMESTAMP MarkedAt
+    }
+
+    ADMISSION_DROP_LOG {
+        NUMBER LogID PK
+        NUMBER StudentID FK
+        VARCHAR2 Action
+        DATE ActionDate
+        VARCHAR2 Reason
+        VARCHAR2 PerformedBy
+    }
+
+    %% Relationships
+    COURSES ||--o{ COURSE_INSTANCES : "creates"
+    COURSES ||--o{ COURSE_PREREQUISITES : "has"
+    COURSES ||--o{ COURSE_PREREQUISITES : "serves as"
+    SESSIONS ||--o{ COURSE_INSTANCES : "includes"
+    
+    COURSE_INSTANCES ||--o{ SECTIONS : "has"
+    FACULTY ||--o{ SECTIONS : "coordinates"
+
+    COURSES ||--o{ BATCHES : "contains"
+    SESSIONS ||--o{ BATCHES : "groups by"
+    FACULTY ||--o{ BATCHES : "monitors"
+
+    STUDENTS ||--o{ STUDENT_REGISTRATIONS : "enrolls in"
+    SECTIONS ||--o{ STUDENT_REGISTRATIONS : "has enrolled"
+
+    STUDENTS ||--o{ ATTENDANCE : "marked for"
+    SECTIONS ||--o{ ATTENDANCE : "logged in"
+    FACULTY ||--o{ ATTENDANCE : "marked by"
+
+    STUDENTS ||--o{ ADMISSION_DROP_LOG : "tracked by"
+    </div>
+</body>
+</html>

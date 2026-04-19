@@ -37,6 +37,10 @@ erDiagram
         string CourseCategory
         int RecommendedYear
     }
+    COURSE_PREREQUISITES {
+        int CourseID FK
+        int PrereqCourseID FK
+    }
     STUDENTS {
         int StudentID PK
         string RollNumber
@@ -105,6 +109,8 @@ erDiagram
 
     SESSIONS ||--o{ COURSE_INSTANCES : "offers"
     COURSES ||--o{ COURSE_INSTANCES : "includes"
+    COURSES ||--o{ COURSE_PREREQUISITES : "has"
+    COURSES ||--o{ COURSE_PREREQUISITES : "requires"
     COURSE_INSTANCES ||--o{ SECTIONS : "has"
     FACULTY ||--o{ SECTIONS : "coordinates"
     COURSES ||--o{ BATCHES : "contains"

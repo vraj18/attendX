@@ -18,6 +18,8 @@ router.get('/sections', async (req, res) => {
     let studentBranch = null;
     let studentYear = null;
     let passedCourseIds = [];
+    let failedCourses = [];
+    let allPrereqs = [];
 
     // If studentId provided, fetch their context for filtering
     if (studentId) {
@@ -40,7 +42,23 @@ router.get('/sections', async (req, res) => {
         [studentId]
       );
       passedCourseIds = passedRes.rows.map(r => r.COURSEID);
+
+      const failedRes = await db.execute(
+        `SELECT ci.CourseID, c.SemesterType
+         FROM STUDENT_REGISTRATIONS sr
+         JOIN SECTIONS sec ON sr.SectionID = sec.SectionID
+         JOIN COURSE_INSTANCES ci ON sec.InstanceID = ci.InstanceID
+         JOIN COURSES c ON ci.CourseID = c.CourseID
+         WHERE sr.StudentID = :id AND sr.RegStatus = 'Registered' 
+         AND sr.Grade IN ('W','FF','LL')`,
+        [studentId]
+      );
+      failedCourses = failedRes.rows;
     }
+
+    const prereqRes = await db.execute(`SELECT CourseID, PrereqCourseID FROM COURSE_PREREQUISITES`);
+    allPrereqs = prereqRes.rows;
+    console.log('DEBUG: allPrereqs:', JSON.stringify(allPrereqs));
 
     const result = await db.execute(
       `SELECT sec.SectionID, sec.SectionName, sec.Room,
@@ -48,6 +66,7 @@ router.get('/sections', async (req, res) => {
               ci.InstanceID, ci.CourseID,
               c.CourseCode, c.CourseName, c.CourseLevel, c.Credits,
               c.CourseCategory, c.RecommendedYear, c.Department as CourseBranch,
+              c.SemesterType AS CourseParity,
               s.SessionID, s.SessionName,
               f.Name AS FacultyName,
               (SELECT COUNT(*) FROM STUDENT_REGISTRATIONS sr
@@ -66,6 +85,7 @@ router.get('/sections', async (req, res) => {
 
     // Apply Filters if student context exists
     if (studentId) {
+      console.log(`Filtering sections for Student ${studentId}. Passed: ${passedCourseIds}. Failed: ${failedCourses.map(f => f.COURSEID)}`);
       sections = sections.filter(sec => {
         // 1. Level Check (no senior year courses)
         if (sec.RECOMMENDEDYEAR > studentYear) return false;
@@ -77,6 +97,24 @@ router.get('/sections', async (req, res) => {
 
         // 3. Passed Check
         if (passedCourseIds.includes(sec.COURSEID)) return false;
+
+        // 4. Backlog Parity Check
+        const backlogMatch = failedCourses.find(f => f.COURSEID === sec.COURSEID);
+        if (backlogMatch) {
+            const sessionParity = sec.SESSIONNAME.toUpperCase().includes('ODD') ? 'Odd' : 'Even';
+            if (backlogMatch.SEMESTERTYPE !== 'Both' && backlogMatch.SEMESTERTYPE !== sessionParity) {
+                return false;
+            }
+        }
+
+        // 5. Prerequisite Check
+        const coursePrereqs = allPrereqs.filter(p => p.COURSEID === sec.COURSEID);
+        for (const p of coursePrereqs) {
+            if (!passedCourseIds.includes(p.PREREQCOURSEID)) {
+                console.log(`Hiding ${sec.COURSECODE} because student hasn't passed prereq ${p.PREREQCOURSEID}`);
+                return false;
+            }
+        }
 
         return true;
       });
